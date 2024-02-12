@@ -8,6 +8,7 @@
 
 use fixedbitset::FixedBitSet;
 use itertools::{zip_eq, Itertools};
+use kdam::tqdm;
 use std::{
     collections::HashSet,
     ffi::OsString,
@@ -15,7 +16,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use indicatif::ProgressBar;
 use kiddo::{KdTree, SquaredEuclidean};
 use std::fs::File;
 use std::io::prelude::*;
@@ -153,10 +153,10 @@ impl BitArrayRepresentation {
 
             next_generation.clear();
 
-            let pb = ProgressBar::new(current_generation.len() as u64);
+            // let pb = ProgressBar::new(current_generation.len() as u64);
 
             // for candidate in pb.wrap_iter(&mut current_generation.iter()) {
-            for candidate in &current_generation {
+            for candidate in tqdm!(current_generation.iter()) {
                 let possibilities = self.get_possibilities(candidate);
 
                 if possibilities.is_clear() {
