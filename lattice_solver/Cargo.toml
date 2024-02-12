@@ -8,12 +8,10 @@ edition = "2021"
 [dependencies]
 criterion = "0.5.1"
 fixedbitset = "0.4.2"
-indicatif = "0.17.8"
 itertools = "0.12.1"
 json = "0.12.4"
-kdam = "0.5.1"
+kdam = {version="0.5.1", features = ["template", "spinner", "gradient"]}
 kiddo = "4.0.0"
-pprof = {version = "0.13.0", features = ["criterion", "flamegraph"]}
 
 [[bench]]
 name = "benchmarks"

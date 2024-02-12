@@ -8,12 +8,9 @@
 
 use fixedbitset::FixedBitSet;
 use itertools::{zip_eq, Itertools};
-use kdam::tqdm;
+use kdam::{term::Colorizer, tqdm, Colour, Spinner};
 use std::{
-    collections::HashSet,
-    ffi::OsString,
-    mem,
-    sync::{Arc, RwLock},
+    collections::HashSet, ffi::OsString, io::{stderr, IsTerminal}, mem, sync::{Arc, RwLock}
 };
 
 use kiddo::{KdTree, SquaredEuclidean};
@@ -146,17 +143,26 @@ impl BitArrayRepresentation {
         let mut next_generation = HashSet::new();
         let mut depth = 0;
         let mut solutions = vec![];
+        kdam::term::init(stderr().is_terminal());
 
         while solutions.is_empty() | (find_all & (next_generation.len() > 0)) {
             depth += 1;
-            println!("Current depth: {depth}");
 
             next_generation.clear();
 
-            // let pb = ProgressBar::new(current_generation.len() as u64);
-
-            // for candidate in pb.wrap_iter(&mut current_generation.iter()) {
-            for candidate in tqdm!(current_generation.iter()) {
+            let iterator = tqdm!(
+                current_generation.iter(),
+                desc = format!("Current depth: {depth}"),
+                mininterval = 1.0/60.0,
+                bar_format = "{desc suffix=' '}|{animation}| {spinner} {count}/{total} [{percentage:.0}%] in {elapsed human=true} ({rate:.1}/s, eta: {remaining human=true})",
+                colour = Colour::gradient(&["#5A56E0", "#EE6FF8"]),
+                spinner = Spinner::new(
+                    &["▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█", "▇█▇", "█▇▆", "▇▆▅", "▆▅▄", "▅▄▃", "▄▃▂", "▃▂▁", "▂▁▂"],
+                    30.0,
+                    1.0,
+                )
+            );
+            for candidate in iterator {
                 let possibilities = self.get_possibilities(candidate);
 
                 if possibilities.is_clear() {
