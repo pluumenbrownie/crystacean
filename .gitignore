@@ -1,0 +1,4 @@
+__pycache__
+.micromamba
+DFT_results
+*.prof

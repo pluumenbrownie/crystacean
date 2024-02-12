@@ -1,0 +1,32 @@
+[package]
+name = "lattice_solver"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+criterion = "0.5.1"
+fixedbitset = "0.4.2"
+indicatif = "0.17.8"
+itertools = "0.12.1"
+json = "0.12.4"
+kiddo = "4.0.0"
+pprof = {version = "0.13.0", features = ["criterion", "flamegraph"]}
+
+[[bench]]
+name = "benchmarks"
+harness = false
+
+[[bench]]
+name = "full_run"
+harness = false
+
+[[example]]
+name = "solve"
+
+[profile.bench]
+debug = true 
+
+[profile.release]
+debug = true
