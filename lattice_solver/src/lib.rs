@@ -8,13 +8,17 @@
 
 use fixedbitset::FixedBitSet;
 use itertools::{zip_eq, Itertools};
-use kdam::{term::Colorizer, tqdm, Colour, Spinner};
+use kdam::{tqdm, Colour, Spinner};
 use std::{
-    collections::HashSet, ffi::OsString, io::{stderr, IsTerminal}, mem, sync::{Arc, RwLock}
+    collections::HashSet,
+    ffi::OsString,
+    fs::File,
+    io::{stderr, IsTerminal},
+    mem,
+    sync::{Arc, RwLock},
 };
 
 use kiddo::{KdTree, SquaredEuclidean};
-use std::fs::File;
 use std::io::prelude::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

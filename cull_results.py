@@ -3,7 +3,6 @@ import json
 from itertools import chain, combinations
 from math import sqrt
 from alive_progress import alive_bar
-from time import sleep
 
 
 # FOCUS = {"sizeable_rust_32232.json", "sizeable_rust_35469.json"}
