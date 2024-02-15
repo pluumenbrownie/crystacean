@@ -24,6 +24,9 @@ harness = false
 [[example]]
 name = "solve"
 
+[[example]]
+name = "3d"
+
 [profile.bench]
 debug = true 
 
