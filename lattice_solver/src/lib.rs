@@ -276,14 +276,10 @@ impl Lattice {
         }
     }
 
-    // #[new]
     pub fn python_new(input_lattice: Vec<(Vec<f32>, Vec<Vec<f32>>)>) -> Self {
         let mut out_lattice = Lattice::new();
         // Create the silicon lattice
         for (location, ghosts) in input_lattice {
-            // let location = silicon.0;
-            // let ghosts = silicon.1;
-
             let new_point = LatticePoint::new(location[0], location[1], None);
             out_lattice.add_point(new_point.clone());
 
