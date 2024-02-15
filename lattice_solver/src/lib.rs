@@ -533,7 +533,7 @@ impl Lattice {
         let mut filename = path.clone();
         filename.push("/");
         filename.push(name);
-        // println!("{filename:?}");
+
         let mut file = File::create(filename).unwrap();
         file.write_all(data.pretty(4).as_bytes()).unwrap();
     }
