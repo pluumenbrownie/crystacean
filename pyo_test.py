@@ -1,8 +1,15 @@
-from lattice_solver_python import Lattice, test_module
+from lattice_solver_python import Lattice, test_module, from_dft_json
 from findthosepoints import full_lattice_from_basis_vectors
 import matplotlib.pyplot as plt
 
 test_module()
+
+tiny_points = [
+    ([0.0, 0.0], []),
+    ([1.6, 2.7], []),
+    ([3.1, 0.0], []),
+    ([4.6, 2.7], []),
+]
 
 boundary_points = [
     ([0.0, 0.0], [
@@ -49,36 +56,43 @@ bigger_boundary_points = [
     ([7.7, 8.0], []),
 ]
 
-# lattice = Lattice(bigger_boundary_points)
+# lattice = Lattice(tiny_points, 1.1)
 
 # basis_vectors = [[1.5, 0.0, 0.0], [0.75, 1.299038105676658, 0.0], [0.0, 0.0, 1.5]]
 
 
-custom_boundary_points = full_lattice_from_basis_vectors(size=2)
+# custom_boundary_points = full_lattice_from_basis_vectors(size=2)
 
-lattice = Lattice(custom_boundary_points)
+# lattice = Lattice(custom_boundary_points, 1.1)
+lattice = from_dft_json("../DFT_results/T1S.json", 1.05)
 plt.plot( *lattice.points_to_plot(), "o")
+for num, point in enumerate(zip( *lattice.points_to_plot())):
+    plt.annotate(str(num), (point[0], point[1]))
+
+plt.plot( *lattice.midpoints_to_plot(), "x")
+plt.plot( *lattice.tripoints_to_plot(), "s")
+plt.plot( *lattice.singlets_to_plot(), "^", markersize=10)
 plt.show()
 bit_lattice = lattice.get_intermediary()
 print(bit_lattice)
 exit()
 solutions = bit_lattice.solve(True)
 
-to_show = {0, 8, 9}
+# to_show = {0, 8, 9}
 for number, solution in enumerate(solutions):
     solved_lattice = lattice.to_solved_lattice(solution)
     # solved_lattice.export("exports", f"test_{number:>04}.json")
 
-    if number in to_show:
-        print(f"Solution {number}")
-        plt.plot( *solved_lattice.points_to_plot(), "o")
-        for num, point in enumerate(zip( *lattice.points_to_plot())):
-            plt.annotate(str(num), (point[0], point[1]))
+    # if number in to_show:
+    print(f"Solution {number}")
+    plt.plot( *solved_lattice.points_to_plot(), "o")
+    for num, point in enumerate(zip( *lattice.points_to_plot())):
+        plt.annotate(str(num), (point[0], point[1]))
 
-        plt.plot( *solved_lattice.midpoints_to_plot(), "x")
-        plt.plot( *solved_lattice.tripoints_to_plot(), "s")
-        plt.plot( *solved_lattice.singlets_to_plot(), "^", markersize=10)
-        for num, point in enumerate(zip( *solved_lattice.oxygens_to_plot())):
-            plt.annotate(str(num), (point[0], point[1]))
-        plt.show()
+    plt.plot( *solved_lattice.midpoints_to_plot(), "x")
+    plt.plot( *solved_lattice.tripoints_to_plot(), "s")
+    plt.plot( *solved_lattice.singlets_to_plot(), "^", markersize=10)
+    for num, point in enumerate(zip( *solved_lattice.oxygens_to_plot())):
+        plt.annotate(str(num), (point[0], point[1]))
+    plt.show()
 # print(rust_those_points.print_in_rust((1, 2)))

@@ -1,4 +1,6 @@
+#![allow(clippy::excessive_precision)]
 use lattice_solver::Lattice;
+
 
 fn main() {
     let lattice_points = vec![
@@ -35,7 +37,7 @@ fn main() {
         (vec![5.25, 3.897114317029974], vec![]),
         (vec![3.75, 3.897114317029974], vec![]),
     ];
-    let lattice = Lattice::python_new(lattice_points);
+    let lattice = Lattice::python_new(lattice_points, 1.1);
     let bit_lattice = lattice.get_intermediary();
 
     bit_lattice.solve(true);
