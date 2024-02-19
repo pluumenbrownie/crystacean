@@ -62,9 +62,9 @@ bigger_boundary_points = [
 
 
 # custom_boundary_points = full_lattice_from_basis_vectors(size=2)
-
 # lattice = Lattice(custom_boundary_points, 1.1)
-lattice = from_dft_json("../DFT_results/T1S.json", 1.05)
+
+lattice = from_dft_json("../DFT_results/T1S.json", 1.3)
 plt.plot( *lattice.points_to_plot(), "o")
 for num, point in enumerate(zip( *lattice.points_to_plot())):
     plt.annotate(str(num), (point[0], point[1]))
@@ -75,7 +75,7 @@ plt.plot( *lattice.singlets_to_plot(), "^", markersize=10)
 plt.show()
 bit_lattice = lattice.get_intermediary()
 print(bit_lattice)
-exit()
+# exit()
 solutions = bit_lattice.solve(True)
 
 # to_show = {0, 8, 9}

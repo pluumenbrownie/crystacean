@@ -10,9 +10,13 @@ use fixedbitset::FixedBitSet;
 use itertools::{zip_eq, Itertools};
 use json::object;
 use kdam::{tqdm, Colour, Spinner};
-use core::prelude;
 use std::{
-    arch::x86_64, collections::HashSet, ffi::OsString, fs::File, io::{stderr, IsTerminal}, mem, sync::{Arc, RwLock}
+    collections::HashSet,
+    ffi::OsString,
+    fs::File,
+    io::{stderr, IsTerminal},
+    mem,
+    sync::{Arc, RwLock},
 };
 
 use kiddo::{KdTree, SquaredEuclidean};
@@ -22,6 +26,7 @@ use std::io::prelude::*;
 struct OxygenIndex(usize);
 
 #[derive(Clone, Copy)]
+
 struct LatticeIndex(usize);
 
 struct LatticePoint {
@@ -48,6 +53,11 @@ impl LatticePoint {
             None => &self.connected_to,
             Some(point) => &point.connected_to,
         }
+    }
+
+    fn distance_to(&self, other: &LatticePoint) -> f32 {
+        ((self.x - other.x).powi(2) + (self.y - other.y).powi(2) + (self.z - other.z).powi(2))
+            .sqrt()
     }
 }
 
@@ -278,31 +288,13 @@ impl Lattice {
     }
 
     /// distance_margin should be 1.1 for 2D, 1.4 for 3D
-    pub fn python_new(
-        input_lattice: Vec<(Vec<f32>, Vec<Vec<f32>>)>, 
-        distance_margin: f32
-    ) -> Self {
+    pub fn python_new(input_lattice: Vec<(Vec<f32>, Vec<Vec<f32>>)>, distance_margin: f32) -> Self {
         // Convert 2D structures to 3D
         let lattice_3d = turn_2d_3d(input_lattice);
-        
-        let mut out_lattice = Lattice::new();
-        // Create the silicon lattice
-        for (location, ghosts) in lattice_3d {
-            let new_point = LatticePoint::new(location[0], location[1], location[2], None);
-            out_lattice.add_point(new_point.clone());
 
-            for ghost in ghosts {
-                out_lattice.add_point(LatticePoint::new(
-                    ghost[0],
-                    ghost[1],
-                    ghost[2],
-                    Some(new_point.clone()),
-                ))
-            }
-        }
-        out_lattice
-            .points
-            .sort_by_key(|p| (100.0 * p.x + p.y).round() as u32);
+        // Create the silicon lattice
+        let mut out_lattice = create_silicon_lattice(lattice_3d);
+
         let first_point_location = {
             let first_point = &out_lattice.points[0];
             [first_point.x, first_point.y, first_point.z]
@@ -315,24 +307,41 @@ impl Lattice {
             .map(|p| [p.x, p.y, p.z])
             .collect_vec();
         let kdtree: KdTree<_, 3> = (&silicon_iterator).into();
-        let node_search_distance = kdtree.nearest_n::<SquaredEuclidean>(
-            &first_point_location, 2
-        )[1].distance * distance_margin;
+        let node_search_distance =
+            kdtree.nearest_n::<SquaredEuclidean>(&first_point_location, 2)[1].distance
+                * distance_margin;
 
         // Tripoints
+        let mut covered_sites = HashSet::new();
         for (number, silicon) in out_lattice.points.iter().enumerate() {
-            let mut close_points =
-                kdtree.within::<SquaredEuclidean>(&[silicon.x, silicon.y, silicon.z], node_search_distance);
+            let mut close_points = kdtree.within::<SquaredEuclidean>(
+                &[silicon.x, silicon.y, silicon.z],
+                node_search_distance,
+            );
             // Sort results on lattice number
             close_points.sort_by_key(|p| p.item);
             let sites = close_points
                 .iter()
-                .skip(1)
-                .filter(|s| s.item as usize > number)
+                .filter(|s| s.item as usize != number)
                 .combinations(2)
+                .filter(|a| {
+                    let mut identifier = [number as u64, a[0].item, a[1].item];
+                    identifier.sort();
+                    covered_sites.insert(identifier)
+                })
                 .filter(|a| {
                     out_lattice.points[a[0].item as usize].x
                         != out_lattice.points[a[1].item as usize].x
+                })
+                .filter(|a| {
+                    out_lattice.points[number].ghost_to.is_none()
+                        || out_lattice.points[a[0].item as usize].ghost_to.is_none()
+                        || out_lattice.points[a[1].item as usize].ghost_to.is_none()
+                })
+                .filter(|a| {
+                    out_lattice.points[a[0].item as usize]
+                        .distance_to(&out_lattice.points[a[1].item as usize])
+                        <= node_search_distance
                 });
 
             for site in sites {
@@ -347,7 +356,8 @@ impl Lattice {
                 let z = (out_lattice.points[number].z
                     + out_lattice.points[site[0].item as usize].z
                     + out_lattice.points[site[1].item as usize].z)
-                    / 3.0 - 2.0;
+                    / 3.0
+                    - 2.0;
                 let sitetype = SiteType::Tripoint(Tripoint([
                     LatticeIndex(number),
                     LatticeIndex(site[0].item as usize),
@@ -359,8 +369,10 @@ impl Lattice {
 
         // Midpoints
         for (number, silicon) in out_lattice.points.iter().enumerate() {
-            let mut close_points =
-                kdtree.within::<SquaredEuclidean>(&[silicon.x, silicon.y, silicon.z], node_search_distance);
+            let mut close_points = kdtree.within::<SquaredEuclidean>(
+                &[silicon.x, silicon.y, silicon.z],
+                node_search_distance,
+            );
             // Sort results on lattice number
             close_points.sort_by_key(|p| p.item);
             let sites = close_points
@@ -377,8 +389,9 @@ impl Lattice {
                     (out_lattice.points[number].x + out_lattice.points[site.item as usize].x) / 2.0;
                 let y =
                     (out_lattice.points[number].y + out_lattice.points[site.item as usize].y) / 2.0;
-                let z =
-                    (out_lattice.points[number].z + out_lattice.points[site.item as usize].z) / 2.0 - 2.0;
+                let z = (out_lattice.points[number].z + out_lattice.points[site.item as usize].z)
+                    / 2.0
+                    - 2.0;
                 let sitetype = SiteType::Midpoint(Midpoint([
                     LatticeIndex(number),
                     LatticeIndex(site.item as usize),
@@ -421,21 +434,58 @@ impl Lattice {
             .count();
 
         let numbers = &parsed[last_id]["positions"]["__ndarray__"][2];
-        let atoms = numbers.members()
+        let atoms = numbers
+            .members()
             .map(|j| j.as_f32().unwrap())
             .collect_vec()
             .chunks_exact(3)
             .map(|c| c.to_vec())
             .collect_vec();
 
-        let ends = atoms.iter()
+        let hydrogenated_ends = atoms
+            .iter()
             .sorted_by(|&a, &b| a[2].total_cmp(&b[2]))
             .take(hydrogen_amount.div_ceil(2))
             .collect_vec();
 
-        let mut input_lattice = vec![];
-        for end in ends {
-            input_lattice.push((end.clone(), vec![]))
+        let cell = &parsed[last_id]["cell"]["array"]["__ndarray__"][2];
+        let (x_vec, y_vec, z_vec) = cell
+            .members()
+            .map(|v| v.as_f32().unwrap())
+            .tuples::<(_,_,_)>()
+            .collect_tuple()
+            .unwrap();
+        
+        
+
+        let input_lattice = {
+            let mut input_lattice = vec![];
+            for end in hydrogenated_ends {
+                let mut new_point = (end.clone(), vec![]);
+                new_point.1.push(
+                    vec![
+                        end[0] + x_vec.0, 
+                        end[1] + x_vec.1, 
+                        end[2] + x_vec.2
+                    ]
+                );
+                new_point.1.push(
+                    vec![
+                        end[0] + y_vec.0, 
+                        end[1] + y_vec.1, 
+                        end[2] + y_vec.2
+                    ]
+                );
+                new_point.1.push(
+                    vec![
+                        end[0] + x_vec.0 + y_vec.0, 
+                        end[1] + x_vec.1 + y_vec.1, 
+                        end[2] + x_vec.2 + y_vec.2
+                    ]
+                );
+                input_lattice.push(new_point);
+            }
+            input_lattice
         };
 
         let lattice = Lattice::python_new(input_lattice, distance_margin);
@@ -444,12 +494,22 @@ impl Lattice {
         let mut new_numbers = parsed[last_id]["numbers"].clone();
         let mut new_positions = parsed[last_id]["positions"].clone();
 
+        println!("Added {} oxygens.", oxygens.len());
+
         for oxygen in oxygens {
-            new_numbers["__ndarray__"][2].push(8).expect("new_numbers[\"__ndarray__\"][2].push(8)");
-            new_positions["__ndarray__"][2].push(oxygen.x).expect("new_positions[\"__ndarray__\"][2].push(oxygen.x)");
-            new_positions["__ndarray__"][2].push(oxygen.y).expect("new_positions[\"__ndarray__\"][2].push(oxygen.y)");
-            new_positions["__ndarray__"][2].push(oxygen.z).expect("new_positions[\"__ndarray__\"][2].push(oxygen.z)");
-        };
+            new_numbers["__ndarray__"][2]
+                .push(8)
+                .expect("new_numbers[\"__ndarray__\"][2].push(8)");
+            new_positions["__ndarray__"][2]
+                .push(oxygen.x)
+                .expect("new_positions[\"__ndarray__\"][2].push(oxygen.x)");
+            new_positions["__ndarray__"][2]
+                .push(oxygen.y)
+                .expect("new_positions[\"__ndarray__\"][2].push(oxygen.y)");
+            new_positions["__ndarray__"][2]
+                .push(oxygen.z)
+                .expect("new_positions[\"__ndarray__\"][2].push(oxygen.z)");
+        }
         new_numbers["__ndarray__"][0][0] = new_numbers["__ndarray__"][2].len().into();
         new_positions["__ndarray__"][0][0] = new_numbers["__ndarray__"][2].len().into();
 
@@ -461,7 +521,7 @@ impl Lattice {
             numbers: new_numbers,
             pbc: parsed[last_id]["pbc"].clone(),
             positions: new_positions,
-            unique_id: parsed[last_id]["unique_id"].clone(),
+            unique_id: "Not unique",
             user: parsed[last_id]["user"].clone(),
         };
 
@@ -627,6 +687,28 @@ impl Lattice {
         let mut file = File::create(filename).unwrap();
         file.write_all(data.pretty(4).as_bytes()).unwrap();
     }
+}
+
+fn create_silicon_lattice(lattice_3d: Vec<(Vec<f32>, Vec<Vec<f32>>)>) -> Lattice {
+    let mut out_lattice = Lattice::new();
+
+    for (location, ghosts) in lattice_3d {
+        let new_point = LatticePoint::new(location[0], location[1], location[2], None);
+        out_lattice.add_point(new_point.clone());
+
+        for ghost in ghosts {
+            out_lattice.add_point(LatticePoint::new(
+                ghost[0],
+                ghost[1],
+                ghost[2],
+                Some(new_point.clone()),
+            ))
+        }
+    }
+    out_lattice
+        .points
+        .sort_by_key(|p| (100.0 * p.x + p.y).round() as u32);
+    out_lattice
 }
 
 fn turn_2d_3d(input_lattice: Vec<(Vec<f32>, Vec<Vec<f32>>)>) -> Vec<(Vec<f32>, Vec<Vec<f32>>)> {
