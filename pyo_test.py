@@ -1,6 +1,7 @@
 from lattice_solver_python import Lattice, test_module, from_dft_json
 from findthosepoints import full_lattice_from_basis_vectors
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 test_module()
 
@@ -64,7 +65,7 @@ bigger_boundary_points = [
 # custom_boundary_points = full_lattice_from_basis_vectors(size=2)
 # lattice = Lattice(custom_boundary_points, 1.1)
 
-lattice = from_dft_json("../DFT_results/T1S.json", 1.3)
+lattice = from_dft_json("../DFT_results/T1L.json", 3.5, False)
 plt.plot( *lattice.points_to_plot(), "o")
 for num, point in enumerate(zip( *lattice.points_to_plot())):
     plt.annotate(str(num), (point[0], point[1]))
@@ -73,18 +74,28 @@ plt.plot( *lattice.midpoints_to_plot(), "x")
 plt.plot( *lattice.tripoints_to_plot(), "s")
 plt.plot( *lattice.singlets_to_plot(), "^", markersize=10)
 plt.show()
-bit_lattice = lattice.get_intermediary()
+
+noloops = lattice.no_rings()
+
+bit_lattice = lattice.get_intermediary(noloops)
 print(bit_lattice)
-# exit()
+exit()
 solutions = bit_lattice.solve(True)
 
+progress = tqdm(
+    enumerate(solutions),
+    total=len(solutions),
+    bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}  "
+)
+
 # to_show = {0, 8, 9}
-for number, solution in enumerate(solutions):
+for number, solution in progress:
     solved_lattice = lattice.to_solved_lattice(solution)
     # solved_lattice.export("exports", f"test_{number:>04}.json")
 
     # if number in to_show:
-    print(f"Solution {number}")
+    progress.set_description(desc=f"Solution {number}")
+    # print(f"Solution {number}")
     plt.plot( *solved_lattice.points_to_plot(), "o")
     for num, point in enumerate(zip( *lattice.points_to_plot())):
         plt.annotate(str(num), (point[0], point[1]))

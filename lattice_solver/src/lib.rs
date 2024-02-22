@@ -7,14 +7,15 @@
 // - get profiler to work
 
 use fixedbitset::FixedBitSet;
-use itertools::{zip_eq, Itertools};
-use json::object;
+use itertools::{multizip, zip_eq, Itertools};
+use json::{object, JsonValue};
 use kdam::{tqdm, Colour, Spinner};
 use std::{
     collections::HashSet,
     ffi::OsString,
     fs::File,
     io::{stderr, IsTerminal},
+    iter::zip,
     mem,
     sync::{Arc, RwLock},
 };
@@ -55,9 +56,8 @@ impl LatticePoint {
         }
     }
 
-    fn distance_to(&self, other: &LatticePoint) -> f32 {
-        ((self.x - other.x).powi(2) + (self.y - other.y).powi(2) + (self.z - other.z).powi(2))
-            .sqrt()
+    fn distance_squared_to(&self, other: &LatticePoint) -> f32 {
+        (self.x - other.x).powi(2) + (self.y - other.y).powi(2) + (self.z - other.z).powi(2)
     }
 }
 
@@ -116,6 +116,7 @@ pub struct BitArrayRepresentation {
     tripoint_mask: FixedBitSet,
     midpoint_mask: FixedBitSet,
     singlet_mask: FixedBitSet,
+    filter: Option<FixedBitSet>,
 }
 
 impl BitArrayRepresentation {
@@ -149,6 +150,24 @@ impl BitArrayRepresentation {
 
     pub fn get_bitarray(&self) -> FixedBitSet {
         self.filled_sites.clone()
+    }
+
+    pub fn filtered(&self, filter: SiteFilter) -> BitArrayRepresentation {
+        let mut filter_set = FixedBitSet::with_capacity(self.filled_sites.len());
+        filter_set.toggle_range(..);
+        for number in filter.wrapped {
+            filter_set.set(number.0, false);
+        };
+        
+        let filled_sites = FixedBitSet::with_capacity(self.filled_sites.len() - filter.wrapped.len());
+
+        let mut tripoint_mask = FixedBitSet::new();
+        let mut midpoint_mask = FixedBitSet::new();
+        let mut singlet_mask = FixedBitSet::new();
+
+        for (tri, mid, sin) in multizip((self.tripoint_mask., self.midpoint_mask., self.singlet_mask.)) {
+            tripoint_mask.extend(tri)
+        };
     }
 
     pub fn solve(&self, find_all: bool) -> Vec<BitArraySolution> {
@@ -219,9 +238,21 @@ impl BitArrayRepresentation {
     }
 }
 
+#[derive(Clone)]
+pub struct SiteFilter {
+    wrapped: Vec<OxygenIndex>
+}
+
+impl SiteFilter {
+    pub fn empty() -> Self {
+        SiteFilter{wrapped: vec![]}
+    }
+}
+
 pub struct Lattice {
     points: Vec<Arc<LatticePoint>>,
     oxygens: Vec<Oxygen>,
+    source_file: Option<JsonValue>,
 }
 
 impl Lattice {
@@ -230,6 +261,7 @@ impl Lattice {
         Lattice {
             points: vec![],
             oxygens: vec![],
+            source_file: None,
         }
     }
 
@@ -284,11 +316,16 @@ impl Lattice {
             tripoint_mask,
             midpoint_mask,
             singlet_mask,
+            filter: None,
         }
     }
 
     /// distance_margin should be 1.1 for 2D, 1.4 for 3D
-    pub fn python_new(input_lattice: Vec<(Vec<f32>, Vec<Vec<f32>>)>, distance_margin: f32) -> Self {
+    pub fn python_new(
+        input_lattice: Vec<(Vec<f32>, Vec<Vec<f32>>)>,
+        distance_margin: f32,
+        autodetect_margin: bool,
+    ) -> Self {
         // Convert 2D structures to 3D
         let lattice_3d = turn_2d_3d(input_lattice);
 
@@ -307,9 +344,13 @@ impl Lattice {
             .map(|p| [p.x, p.y, p.z])
             .collect_vec();
         let kdtree: KdTree<_, 3> = (&silicon_iterator).into();
-        let node_search_distance =
+        let node_search_distance = if autodetect_margin {
             kdtree.nearest_n::<SquaredEuclidean>(&first_point_location, 2)[1].distance
-                * distance_margin;
+                * distance_margin
+        } else {
+            distance_margin.powi(2)
+        };
+        println!("{node_search_distance:?}");
 
         // Tripoints
         let mut covered_sites = HashSet::new();
@@ -340,7 +381,7 @@ impl Lattice {
                 })
                 .filter(|a| {
                     out_lattice.points[a[0].item as usize]
-                        .distance_to(&out_lattice.points[a[1].item as usize])
+                        .distance_squared_to(&out_lattice.points[a[1].item as usize])
                         <= node_search_distance
                 });
 
@@ -357,7 +398,7 @@ impl Lattice {
                     + out_lattice.points[site[0].item as usize].z
                     + out_lattice.points[site[1].item as usize].z)
                     / 3.0
-                    - 2.0;
+                    - 1.5;
                 let sitetype = SiteType::Tripoint(Tripoint([
                     LatticeIndex(number),
                     LatticeIndex(site[0].item as usize),
@@ -410,7 +451,7 @@ impl Lattice {
             out_lattice.oxygens.push(Oxygen::new(
                 silicon.x,
                 silicon.y,
-                silicon.z - 2.0,
+                silicon.z - 2.5,
                 SiteType::Singlet(Singlet([LatticeIndex(number)])),
             ));
         }
@@ -419,11 +460,16 @@ impl Lattice {
         out_lattice
     }
 
-    pub fn from_dft_json(filename: String, distance_margin: f32) -> Self {
+    fn add_source_file(&mut self, source_file: JsonValue) {
+        self.source_file = Some(source_file);
+    }
+
+    pub fn from_dft_json(filename: String, distance_margin: f32, autodetect_margin: bool) -> Self {
         let mut buffer = String::new();
-        let mut file = File::open(filename).unwrap();
-        file.read_to_string(&mut buffer).unwrap();
-        let parsed = json::parse(&buffer).unwrap();
+        let mut file = File::open(filename).expect("Opening file failed.");
+        file.read_to_string(&mut buffer)
+            .expect("Reading file failed.");
+        let parsed = json::parse(&buffer).expect("Parsing file failed/");
 
         let last_id = &parsed["ids"][parsed["ids"].len() - 1].to_string();
 
@@ -449,47 +495,43 @@ impl Lattice {
             .collect_vec();
 
         let cell = &parsed[last_id]["cell"]["array"]["__ndarray__"][2];
-        let (x_vec, y_vec, z_vec) = cell
+        let (x_vec, y_vec, _z_vec) = cell
             .members()
             .map(|v| v.as_f32().unwrap())
-            .tuples::<(_,_,_)>()
+            .tuples::<(_, _, _)>()
             .collect_tuple()
-            .unwrap();
-        
-        
+            .expect("Json 'cell' property format is incorrect.");
 
         let input_lattice = {
             let mut input_lattice = vec![];
             for end in hydrogenated_ends {
                 let mut new_point = (end.clone(), vec![]);
-                new_point.1.push(
-                    vec![
-                        end[0] + x_vec.0, 
-                        end[1] + x_vec.1, 
-                        end[2] + x_vec.2
-                    ]
-                );
-                new_point.1.push(
-                    vec![
-                        end[0] + y_vec.0, 
-                        end[1] + y_vec.1, 
-                        end[2] + y_vec.2
-                    ]
-                );
-                new_point.1.push(
-                    vec![
-                        end[0] + x_vec.0 + y_vec.0, 
-                        end[1] + x_vec.1 + y_vec.1, 
-                        end[2] + x_vec.2 + y_vec.2
-                    ]
-                );
+                new_point
+                    .1
+                    .push(vec![end[0] + x_vec.0, end[1] + x_vec.1, end[2] + x_vec.2]);
+                new_point
+                    .1
+                    .push(vec![end[0] + y_vec.0, end[1] + y_vec.1, end[2] + y_vec.2]);
+                new_point.1.push(vec![
+                    end[0] + x_vec.0 + y_vec.0,
+                    end[1] + x_vec.1 + y_vec.1,
+                    end[2] + x_vec.2 + y_vec.2,
+                ]);
                 input_lattice.push(new_point);
             }
             input_lattice
         };
 
-        let lattice = Lattice::python_new(input_lattice, distance_margin);
-        let oxygens = &lattice.oxygens;
+        let mut lattice = Lattice::python_new(input_lattice, distance_margin, autodetect_margin);
+        lattice.add_source_file(parsed.clone());
+
+        lattice
+    }
+
+    pub fn export_to_ase(&self) {
+        let parsed = self.source_file.as_ref().unwrap();
+        let oxygens = &self.oxygens;
+        let last_id = &parsed["ids"][parsed["ids"].len() - 1].to_string();
 
         let mut new_numbers = parsed[last_id]["numbers"].clone();
         let mut new_positions = parsed[last_id]["positions"].clone();
@@ -527,8 +569,72 @@ impl Lattice {
 
         let mut file = File::create("output.json").unwrap();
         file.write_all(export_data.pretty(4).as_bytes()).unwrap();
+    }
 
-        lattice
+    pub fn no_rings(&self) -> SiteFilter {
+        let parsed = self.source_file.as_ref().unwrap();
+
+        let last_id = &parsed["ids"][parsed["ids"].len() - 1].to_string();
+
+        let numbers = &parsed[last_id]["positions"]["__ndarray__"][2];
+        let atoms = numbers
+            .members()
+            .map(|j| j.as_f32().unwrap())
+            .collect_vec()
+            .chunks_exact(3)
+            .map(|c| c.to_vec())
+            .collect_vec();
+
+        let top_silicon_locations = atoms
+            .iter()
+            .sorted_by(|&a, &b| a[2].total_cmp(&b[2]))
+            .filter(|&s| (s[2] > 8.4) & (s[2] < 10.0))
+            .map(|v| [v[0], v[1], v[2]])
+            .collect_vec();
+
+        let points_vector = self.points.iter().map(|p| [p.x, p.y, p.z]).collect_vec();
+        let points_tree: KdTree<_, 3> = (&points_vector).into();
+
+        let mut point_group_vector = vec![0; self.oxygens.len()];
+
+        for (number, atom) in top_silicon_locations.iter().enumerate() {
+            let close_points = points_tree.within::<SquaredEuclidean>(atom, 1.5f32.powi(2));
+            for point in close_points {
+                point_group_vector[point.item as usize] = number;
+            };
+        };
+
+        let mut disabled_oxygens = vec![];
+
+        for (number, oxygen) in self.oxygens.iter().enumerate() {
+            match oxygen.sitetype {
+                SiteType::Singlet(_) => {},
+                SiteType::Midpoint(p) => {
+                    let connections = p.0;
+                    let same_group = |a: usize, b: usize| {
+                        point_group_vector[connections[a].0]
+                            == point_group_vector[connections[b].0]
+                    };
+
+                    if same_group(0, 1) {
+                        disabled_oxygens.push(OxygenIndex(number));
+                    };
+                }
+                SiteType::Tripoint(p) => {
+                    let connections = p.0;
+                    let same_group = |a: usize, b: usize| {
+                        point_group_vector[connections[a].0]
+                            == point_group_vector[connections[b].0]
+                    };
+
+                    if same_group(0, 1) | same_group(1, 2) | same_group(0, 2) {
+                        disabled_oxygens.push(OxygenIndex(number));
+                    };
+                }
+            }
+        };
+
+        SiteFilter{wrapped: disabled_oxygens}
     }
 
     /// Returns the coordinates of the lattice points in two lists.
@@ -639,6 +745,7 @@ impl Lattice {
         Lattice {
             points: self.points.clone(),
             oxygens: solved_oxygens,
+            source_file: self.source_file.clone(),
         }
     }
 

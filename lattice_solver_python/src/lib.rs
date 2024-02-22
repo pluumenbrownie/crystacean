@@ -4,10 +4,23 @@ use std::ffi::OsString;
 use ::lattice_solver::BitArrayRepresentation as WrappedRepresentation;
 use ::lattice_solver::BitArraySolution as WrappedSolution;
 use ::lattice_solver::Lattice as WrappedLattice;
+use ::lattice_solver::SiteFilter as WrappedFilter;
 
 #[pyclass]
 struct BitArraySolution {
     wrapped: WrappedSolution,
+}
+
+#[pyclass]
+#[derive(Clone)]
+struct SiteFilter {
+    wrapped: WrappedFilter
+}
+
+impl SiteFilter {
+    fn empty() -> Self {
+        SiteFilter{wrapped: WrappedFilter::empty()}
+    }
 }
 
 #[pyclass]
@@ -42,9 +55,10 @@ struct Lattice {
 #[pymethods]
 impl Lattice {
     #[new]
-    fn python_new(input_lattice: Vec<(Vec<f32>, Vec<Vec<f32>>)>, distance_margin: f32) -> Self {
+    #[pyo3(signature = (input_lattice, distance_margin, autodetect_margin=true))]
+    fn python_new(input_lattice: Vec<(Vec<f32>, Vec<Vec<f32>>)>, distance_margin: f32, autodetect_margin: bool) -> Self {
         Lattice {
-            wrapped: WrappedLattice::python_new(input_lattice, distance_margin),
+            wrapped: WrappedLattice::python_new(input_lattice, distance_margin, autodetect_margin),
         }
     }
 
@@ -68,9 +82,10 @@ impl Lattice {
         self.wrapped.singlets_to_plot()
     }
 
-    fn get_intermediary(&self) -> BitArrayRepresentation {
+    #[pyo3(signature = (filter=SiteFilter::empty()))]
+    fn get_intermediary(&self, filter: SiteFilter) -> BitArrayRepresentation {
         BitArrayRepresentation {
-            wrapped: self.wrapped.get_intermediary(),
+            wrapped: self.wrapped.get_intermediary(filter.wrapped),
         }
     }
 
@@ -81,15 +96,24 @@ impl Lattice {
     }
 
     pub fn export(&self, path: OsString, name: String) {
-        self.wrapped.export(path, name)
+        self.wrapped.export(path, name);
+    }
+
+    fn export_to_ase(&self) {
+        self.wrapped.export_to_ase();
+    }
+
+    fn no_rings(&self) -> SiteFilter {
+        SiteFilter{wrapped: self.wrapped.no_rings()}
     }
 }
 
 #[pyfunction]
+#[pyo3(signature = (filename, distance_margin, autodetect_margin=true))]
 /// Put a new layer on top of an existing structure, calculated with DFT.
-fn from_dft_json(filename: String, distance_margin: f32) -> Lattice {
+fn from_dft_json(filename: String, distance_margin: f32, autodetect_margin: bool) -> Lattice {
     Lattice {
-        wrapped: WrappedLattice::from_dft_json(filename, distance_margin)
+        wrapped: WrappedLattice::from_dft_json(filename, distance_margin, autodetect_margin)
     }
 }
 
