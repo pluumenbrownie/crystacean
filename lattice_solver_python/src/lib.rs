@@ -38,6 +38,10 @@ impl BitArrayRepresentation {
             .collect()
     }
 
+    fn filtered(&self, filter: SiteFilter) -> BitArrayRepresentation {
+        BitArrayRepresentation { wrapped: self.wrapped.filtered(filter.wrapped) }
+    }
+
     fn __str__(&self) -> String {
         self.wrapped.__str__()
     }
@@ -82,11 +86,14 @@ impl Lattice {
         self.wrapped.singlets_to_plot()
     }
 
-    #[pyo3(signature = (filter=SiteFilter::empty()))]
-    fn get_intermediary(&self, filter: SiteFilter) -> BitArrayRepresentation {
+    fn get_intermediary(&self) -> BitArrayRepresentation {
         BitArrayRepresentation {
-            wrapped: self.wrapped.get_intermediary(filter.wrapped),
+            wrapped: self.wrapped.get_intermediary(),
         }
+    }
+
+    fn no_rings(&self) -> SiteFilter {
+        SiteFilter{wrapped: self.wrapped.no_rings()}
     }
 
     fn to_solved_lattice(&self, solution: &BitArraySolution) -> Self {
@@ -99,12 +106,12 @@ impl Lattice {
         self.wrapped.export(path, name);
     }
 
-    fn export_to_ase(&self) {
-        self.wrapped.export_to_ase();
+    fn diagnostic_ase(&self) {
+        self.wrapped.diagnostic_ase();
     }
 
-    fn no_rings(&self) -> SiteFilter {
-        SiteFilter{wrapped: self.wrapped.no_rings()}
+    fn export_as_ase_json(&self, filename: String) {
+        self.wrapped.export_as_ase_json(filename)
     }
 }
 

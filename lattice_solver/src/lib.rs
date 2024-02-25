@@ -11,13 +11,7 @@ use itertools::{multizip, zip_eq, Itertools};
 use json::{object, JsonValue};
 use kdam::{tqdm, Colour, Spinner};
 use std::{
-    collections::HashSet,
-    ffi::OsString,
-    fs::File,
-    io::{stderr, IsTerminal},
-    iter::zip,
-    mem,
-    sync::{Arc, RwLock},
+    borrow::BorrowMut, collections::HashSet, ffi::OsString, fs::File, io::{stderr, IsTerminal}, iter::zip, mem, sync::{Arc, RwLock}
 };
 
 use kiddo::{KdTree, SquaredEuclidean};
@@ -108,7 +102,37 @@ struct Midpoint([LatticeIndex; 2]);
 #[derive(Clone, Copy)]
 struct Tripoint([LatticeIndex; 3]);
 
-pub struct BitArraySolution(FixedBitSet);
+#[derive(Debug, PartialEq)]
+pub struct BitArraySolution(pub FixedBitSet);
+
+impl BitArraySolution {
+    /// Convert a solution from a filtered `BitArrayRepresentation` back into 
+    /// it's full form.
+    /// 
+    /// ```
+    /// use lattice_solver::BitArraySolution;
+    /// 
+    /// let mut compressed = BitArraySolution(fixedbitset::FixedBitSet::with_capacity_and_blocks(4, vec![0b10110]));
+    /// let full = BitArraySolution(fixedbitset::FixedBitSet::with_capacity_and_blocks(6, vec![0b1001010000]));
+    /// let filter = fixedbitset::FixedBitSet::with_capacity_and_blocks(6, vec![0b1101011000]);
+    /// 
+    /// compressed.inflate(&filter);
+    /// assert_eq!(compressed, full);
+    /// ```
+    /// Shown schematically:
+    /// ```
+    /// 10 1 10
+    /// 1101011000
+    /// 1001010000
+    /// ```
+    pub fn inflate(&mut self, filter_bitset: &FixedBitSet) {
+        let mut new_vector = FixedBitSet::with_capacity(filter_bitset.len());
+        for (self_number, new_location) in filter_bitset.ones().enumerate() {
+            new_vector.set(new_location, self.0[self_number]);
+        };
+        self.0 = new_vector;
+    }
+}
 
 pub struct BitArrayRepresentation {
     filled_sites: FixedBitSet,
@@ -153,21 +177,42 @@ impl BitArrayRepresentation {
     }
 
     pub fn filtered(&self, filter: SiteFilter) -> BitArrayRepresentation {
+        println!("{filter:?}");
         let mut filter_set = FixedBitSet::with_capacity(self.filled_sites.len());
         filter_set.toggle_range(..);
         for number in filter.wrapped {
             filter_set.set(number.0, false);
         };
+        let new_length = filter_set.count_ones(..);
         
-        let filled_sites = FixedBitSet::with_capacity(self.filled_sites.len() - filter.wrapped.len());
+        let filled_sites = FixedBitSet::with_capacity(new_length);
 
-        let mut tripoint_mask = FixedBitSet::new();
-        let mut midpoint_mask = FixedBitSet::new();
-        let mut singlet_mask = FixedBitSet::new();
+        let mut tripoint_mask = FixedBitSet::with_capacity(new_length);
+        let mut midpoint_mask = FixedBitSet::with_capacity(new_length);
+        let mut singlet_mask = FixedBitSet::with_capacity(new_length);
 
-        for (tri, mid, sin) in multizip((self.tripoint_mask., self.midpoint_mask., self.singlet_mask.)) {
-            tripoint_mask.extend(tri)
+        let mut exclusion_matrix = vec![];
+
+        for (new_number, old_number) in filter_set.ones().enumerate() {
+            tripoint_mask.set(new_number, self.tripoint_mask[old_number]);
+            midpoint_mask.set(new_number, self.midpoint_mask[old_number]);
+            singlet_mask.set(new_number, self.singlet_mask[old_number]);
+
+            let mut new_matrix_row = FixedBitSet::with_capacity(new_length);
+            for (col_number, old_col_number) in filter_set.ones().enumerate() {
+                new_matrix_row.set(col_number, self.exclusion_matrix[old_number][old_col_number].into());
+            };
+            exclusion_matrix.push(new_matrix_row);
         };
+
+        BitArrayRepresentation{
+            filled_sites,
+            exclusion_matrix,
+            tripoint_mask,
+            midpoint_mask,
+            singlet_mask,
+            filter: Some(filter_set),
+        }
     }
 
     pub fn solve(&self, find_all: bool) -> Vec<BitArraySolution> {
@@ -214,6 +259,11 @@ impl BitArrayRepresentation {
 
             mem::swap(&mut current_generation, &mut next_generation);
         }
+        if let Some(filter) = &self.filter {
+            for solution in &mut solutions {
+                solution.inflate(filter);
+            };
+        }
         solutions
     }
 
@@ -228,7 +278,12 @@ impl BitArrayRepresentation {
         output += format!("  tripoint_mask = \n    {}\n", self.tripoint_mask).as_str();
         output += format!("  midpoint_mask = \n    {}\n", self.midpoint_mask).as_str();
         output += format!("  singlet_mask = \n    {}\n", self.singlet_mask).as_str();
-        output += "}";
+        output += format!("  filter = \n    ").as_str();
+        output += match &self.filter {
+            None => "None".into(),
+            Some(fbs) => format!("{}", fbs)
+        }.as_str();
+        output += "\n}";
 
         output
     }
@@ -238,7 +293,7 @@ impl BitArrayRepresentation {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SiteFilter {
     wrapped: Vec<OxygenIndex>
 }
@@ -398,7 +453,7 @@ impl Lattice {
                     + out_lattice.points[site[0].item as usize].z
                     + out_lattice.points[site[1].item as usize].z)
                     / 3.0
-                    - 1.5;
+                    - 2.2;
                 let sitetype = SiteType::Tripoint(Tripoint([
                     LatticeIndex(number),
                     LatticeIndex(site[0].item as usize),
@@ -432,7 +487,7 @@ impl Lattice {
                     (out_lattice.points[number].y + out_lattice.points[site.item as usize].y) / 2.0;
                 let z = (out_lattice.points[number].z + out_lattice.points[site.item as usize].z)
                     / 2.0
-                    - 2.0;
+                    - 2.6;
                 let sitetype = SiteType::Midpoint(Midpoint([
                     LatticeIndex(number),
                     LatticeIndex(site.item as usize),
@@ -451,7 +506,7 @@ impl Lattice {
             out_lattice.oxygens.push(Oxygen::new(
                 silicon.x,
                 silicon.y,
-                silicon.z - 2.5,
+                silicon.z - 3.2,
                 SiteType::Singlet(Singlet([LatticeIndex(number)])),
             ));
         }
@@ -528,7 +583,7 @@ impl Lattice {
         lattice
     }
 
-    pub fn export_to_ase(&self) {
+    pub fn diagnostic_ase(&self) {
         let parsed = self.source_file.as_ref().unwrap();
         let oxygens = &self.oxygens;
         let last_id = &parsed["ids"][parsed["ids"].len() - 1].to_string();
@@ -793,6 +848,68 @@ impl Lattice {
 
         let mut file = File::create(filename).unwrap();
         file.write_all(data.pretty(4).as_bytes()).unwrap();
+    }
+
+    pub fn export_as_ase_json(&self, filename: String) {
+        let parsed = self.source_file.as_ref().unwrap();
+        let oxygens = &self.oxygens;
+        let last_id = &parsed["ids"][parsed["ids"].len() - 1].to_string();
+
+        let mut new_numbers = parsed[last_id]["numbers"].clone();
+        let mut new_positions = parsed[last_id]["positions"].clone();
+
+        let z_coords = new_positions["__ndarray__"][2]
+            .members_mut()
+            .skip(2)
+            .step_by(3);
+
+        let change_these_atoms = new_numbers["__ndarray__"][2]
+            .members_mut()
+            .zip(z_coords)
+            .filter(
+                |(e, z)| (e.as_usize().unwrap() == 1) 
+                & (z.as_f64().unwrap() < 20.0)
+            )
+            .map(|(n, _, _)|);
+        for (mut atom, z_level) in change_these_atoms {
+            let mut new: JsonValue = 8u8.into();
+            atom = &mut new;
+            // println!("{} {}", atom.as_usize().unwrap(), z_level.as_f64().unwrap());
+        };
+        
+        println!("Added {} oxygens.", oxygens.len());
+        for oxygen in oxygens {
+            new_numbers["__ndarray__"][2]
+                .push(14)
+                .expect("new_numbers[\"__ndarray__\"][2].push(8)");
+            new_positions["__ndarray__"][2]
+                .push(oxygen.x)
+                .expect("new_positions[\"__ndarray__\"][2].push(oxygen.x)");
+            new_positions["__ndarray__"][2]
+                .push(oxygen.y)
+                .expect("new_positions[\"__ndarray__\"][2].push(oxygen.y)");
+            new_positions["__ndarray__"][2]
+                .push(oxygen.z)
+                .expect("new_positions[\"__ndarray__\"][2].push(oxygen.z)");
+        }
+        new_numbers["__ndarray__"][0][0] = new_numbers["__ndarray__"][2].len().into();
+        new_positions["__ndarray__"][0][0] = new_numbers["__ndarray__"][2].len().into();
+
+        let mut export_data = json::JsonValue::new_object();
+        export_data["1"] = object! {
+            cell: parsed[last_id]["cell"].clone(),
+            ctime: parsed[last_id]["ctime"].clone(),
+            mtime: parsed[last_id]["mtime"].clone(),
+            numbers: new_numbers,
+            pbc: parsed[last_id]["pbc"].clone(),
+            positions: new_positions,
+            unique_id: "Not unique",
+            user: parsed[last_id]["user"].clone(),
+        };
+
+        let mut file = File::create(&filename).unwrap();
+        file.write_all(export_data.pretty(4).as_bytes()).unwrap();
+        println!("Saved {filename}");
     }
 }
 
