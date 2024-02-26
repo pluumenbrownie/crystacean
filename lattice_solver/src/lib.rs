@@ -471,7 +471,7 @@ impl Lattice {
                     + out_lattice.points[site[0].item as usize].z
                     + out_lattice.points[site[1].item as usize].z)
                     / 3.0
-                    - 2.2;
+                    - 1.1;
                 let sitetype = SiteType::Tripoint(Tripoint([
                     LatticeIndex(number),
                     LatticeIndex(site[0].item as usize),
@@ -505,7 +505,7 @@ impl Lattice {
                     (out_lattice.points[number].y + out_lattice.points[site.item as usize].y) / 2.0;
                 let z = (out_lattice.points[number].z + out_lattice.points[site.item as usize].z)
                     / 2.0
-                    - 2.6;
+                    - 1.4;
                 let sitetype = SiteType::Midpoint(Midpoint([
                     LatticeIndex(number),
                     LatticeIndex(site.item as usize),
@@ -524,7 +524,7 @@ impl Lattice {
             out_lattice.oxygens.push(Oxygen::new(
                 silicon.x,
                 silicon.y,
-                silicon.z - 3.2,
+                silicon.z - 1.7,
                 SiteType::Singlet(Singlet([LatticeIndex(number)])),
             ));
         }

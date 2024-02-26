@@ -65,7 +65,7 @@ bigger_boundary_points = [
 # custom_boundary_points = full_lattice_from_basis_vectors(size=2)
 # lattice = Lattice(custom_boundary_points, 1.1)
 
-lattice = from_dft_json("DFT_results/T2s.json", 3.5, False)
+lattice = from_dft_json("DFT_results/T1S.json", 3.5, False)
 # for num, point in enumerate(zip( *lattice.points_to_plot())):
 #     plt.annotate(str(num), (point[0], point[1]))
 
@@ -92,7 +92,7 @@ progress = tqdm(
     bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}  "
 )
 
-to_show = {0, 8, 9}
+to_show = {0, 1, 2, 3, 4, 8, 9}
 for number, solution in progress:
     solved_lattice = lattice.to_solved_lattice(solution)
 
