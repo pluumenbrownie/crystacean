@@ -7,7 +7,7 @@
 // - get profiler to work
 
 use fixedbitset::FixedBitSet;
-use itertools::{multizip, zip_eq, Itertools, Zip};
+use itertools::{izip, multizip, zip_eq, Itertools, Zip};
 use json::{object, JsonValue};
 use kdam::{tqdm, Colour, Spinner};
 use std::{
@@ -581,14 +581,32 @@ impl Lattice {
                 let mut new_point = (end.clone(), vec![]);
                 new_point
                     .1
-                    .push(vec![end[0] + x_vec.0, end[1] + x_vec.1, end[2] + x_vec.2]);
+                    .push(vec![
+                        end[0] + x_vec.0, 
+                        end[1] + x_vec.1, 
+                        end[2] + x_vec.2
+                    ]);
                 new_point
                     .1
-                    .push(vec![end[0] + y_vec.0, end[1] + y_vec.1, end[2] + y_vec.2]);
+                    .push(vec![
+                        end[0] + y_vec.0, 
+                        end[1] + y_vec.1, 
+                        end[2] + y_vec.2
+                    ]);
                 new_point.1.push(vec![
                     end[0] + x_vec.0 + y_vec.0,
                     end[1] + x_vec.1 + y_vec.1,
                     end[2] + x_vec.2 + y_vec.2,
+                ]);
+                new_point.1.push(vec![
+                    end[0] + x_vec.0 - y_vec.0,
+                    end[1] + x_vec.1 - y_vec.1,
+                    end[2] + x_vec.2 - y_vec.2,
+                ]);
+                new_point.1.push(vec![
+                    end[0] - x_vec.0 + y_vec.0,
+                    end[1] - x_vec.1 + y_vec.1,
+                    end[2] - x_vec.2 + y_vec.2,
                 ]);
                 input_lattice.push(new_point);
             }
@@ -644,6 +662,49 @@ impl Lattice {
         file.write_all(export_data.pretty(4).as_bytes()).unwrap();
     }
 
+    pub fn no_rings_plot(&self) -> Vec<(usize, f32, f32)> {
+        let parsed = self.source_file.as_ref().unwrap();
+
+        let last_id = &parsed["ids"][parsed["ids"].len() - 1].to_string();
+
+        let numbers = &parsed[last_id]["positions"]["__ndarray__"][2];
+        let atoms = numbers
+            .members()
+            .map(|j| j.as_f32().unwrap())
+            .collect_vec()
+            .chunks_exact(3)
+            .map(|c| c.to_vec())
+            .collect_vec();
+
+        let top_silicon_locations = atoms
+            .iter()
+            .sorted_by(|&a, &b| a[2].total_cmp(&b[2]))
+            .filter(|&s| (s[2] > 8.4) & (s[2] < 10.0))
+            .map(|v| [v[0], v[1], v[2]])
+            .collect_vec();
+
+        let points_vector = self.points.iter().map(|p| [p.x, p.y, p.z]).collect_vec();
+        println!("{points_vector:?}");
+        println!("length: {}", points_vector.len());
+        let points_tree: KdTree<_, 3> = (&points_vector).into();
+
+        let point_group_vector = {
+            let mut point_group_vector = vec![1000; self.points.len()];
+
+            for (number, atom) in top_silicon_locations.iter().enumerate() {
+                let close_points = points_tree.within::<SquaredEuclidean>(atom, 1.7f32.powi(2));
+                println!("{:?} --- {:?}", atom, close_points);
+                for point in close_points {
+                    point_group_vector[point.item as usize] = number;
+                };
+            };
+            point_group_vector
+        };
+        println!("{point_group_vector:?}");
+
+        izip!(point_group_vector, self.points.iter().map(|o| o.x), self.points.iter().map(|o| o.y)).collect_vec()
+    }
+
     pub fn no_rings(&self) -> SiteFilter {
         let parsed = self.source_file.as_ref().unwrap();
 
@@ -666,16 +727,25 @@ impl Lattice {
             .collect_vec();
 
         let points_vector = self.points.iter().map(|p| [p.x, p.y, p.z]).collect_vec();
+        println!("{points_vector:?}");
+        println!("length: {}", points_vector.len());
         let points_tree: KdTree<_, 3> = (&points_vector).into();
 
-        let mut point_group_vector = vec![0; self.oxygens.len()];
+        let point_group_vector = {
+            let mut point_group_vector = vec![1000; self.points.len()];
 
-        for (number, atom) in top_silicon_locations.iter().enumerate() {
-            let close_points = points_tree.within::<SquaredEuclidean>(atom, 1.5f32.powi(2));
-            for point in close_points {
-                point_group_vector[point.item as usize] = number;
+            for (number, atom) in top_silicon_locations.iter().enumerate() {
+                let close_points = points_tree.within::<SquaredEuclidean>(atom, 1.7f32.powi(2));
+                println!("{:?} --- {:?}", atom, close_points);
+                for point in close_points {
+                    point_group_vector[point.item as usize] = number;
+                };
             };
+            point_group_vector
         };
+        println!("{point_group_vector:?}");
+        
+
 
         let mut disabled_oxygens = vec![];
 

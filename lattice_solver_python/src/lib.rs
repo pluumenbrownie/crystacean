@@ -96,6 +96,10 @@ impl Lattice {
         SiteFilter{wrapped: self.wrapped.no_rings()}
     }
 
+    fn no_rings_plot(&self) -> Vec<(usize, f32, f32)>{
+        self.wrapped.no_rings_plot()
+    }
+
     fn to_solved_lattice(&self, solution: &BitArraySolution) -> Self {
         Self {
             wrapped: self.wrapped.to_solved_lattice(&solution.wrapped),

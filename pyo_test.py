@@ -65,15 +65,17 @@ bigger_boundary_points = [
 # custom_boundary_points = full_lattice_from_basis_vectors(size=2)
 # lattice = Lattice(custom_boundary_points, 1.1)
 
-lattice = from_dft_json("DFT_results/T1L.json", 3.5, False)
-# plt.plot( *lattice.points_to_plot(), "o")
+lattice = from_dft_json("DFT_results/T2s.json", 3.5, False)
 # for num, point in enumerate(zip( *lattice.points_to_plot())):
 #     plt.annotate(str(num), (point[0], point[1]))
 
-# plt.plot( *lattice.midpoints_to_plot(), "x")
-# plt.plot( *lattice.tripoints_to_plot(), "s")
-# plt.plot( *lattice.singlets_to_plot(), "^", markersize=10)
-# plt.show()
+plt.plot( *lattice.points_to_plot(), "o")
+plt.plot( *lattice.midpoints_to_plot(), "x")
+plt.plot( *lattice.tripoints_to_plot(), "s")
+plt.plot( *lattice.singlets_to_plot(), "^", markersize=10)
+# for num, x, y in lattice.no_rings_plot():
+#     plt.annotate(str(num), (x, y))
+plt.show()
 
 noloops = lattice.no_rings()
 
