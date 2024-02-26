@@ -7,15 +7,33 @@
 // - get profiler to work
 
 use fixedbitset::FixedBitSet;
-use itertools::{multizip, zip_eq, Itertools};
+use itertools::{multizip, zip_eq, Itertools, Zip};
 use json::{object, JsonValue};
 use kdam::{tqdm, Colour, Spinner};
 use std::{
-    borrow::BorrowMut, collections::HashSet, ffi::OsString, fs::File, io::{stderr, IsTerminal}, iter::zip, mem, sync::{Arc, RwLock}
+    collections::HashSet, ffi::OsString, fs::File, io::{stderr, IsTerminal}, iter::zip, mem, sync::{Arc, RwLock}
 };
 
 use kiddo::{KdTree, SquaredEuclidean};
 use std::io::prelude::*;
+
+const TRIPLE_CROWN: [f32; 9] = [
+    -0.000082766, -1.397718937, -0.517599594, 
+    -1.222253196, 0.702780512,  -0.517599594, 
+    1.204777673, 0.711865236, -0.517599594
+];
+const DOUBLE_CROWN: [f32; 6] = [
+    2.2252961107321143 - 1.0526814404964109, 
+    -1.3867293215799141 - -1.0917258490752173, 
+    -(9.26392293591872 - 8.41953003801284), 
+
+    2.2252961107321143 - 3.3223088674933625, 
+    -1.3867293215799141 - -1.6248356621955473, 
+    -(9.26392293591872 - 8.313286837087986)
+];
+const SINGLE_CROWN: [f32; 3] = [
+    0.0, 0.0, -1.7
+];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct OxygenIndex(usize);
@@ -237,7 +255,7 @@ impl BitArrayRepresentation {
                 colour = Colour::gradient(&["#5A56E0", "#EE6FF8"]),
                 spinner = Spinner::new(
                     &["▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█", "▇█▇", "█▇▆", "▇▆▅", "▆▅▄", "▅▄▃", "▄▃▂", "▃▂▁", "▂▁▂"],
-                    30.0,
+                    60.0,
                     1.0,
                 )
             );
@@ -855,27 +873,41 @@ impl Lattice {
         let oxygens = &self.oxygens;
         let last_id = &parsed["ids"][parsed["ids"].len() - 1].to_string();
 
+        let old_numbers = parsed[last_id]["numbers"].clone();
         let mut new_numbers = parsed[last_id]["numbers"].clone();
         let mut new_positions = parsed[last_id]["positions"].clone();
 
         let z_coords = new_positions["__ndarray__"][2]
-            .members_mut()
+            .members()
             .skip(2)
             .step_by(3);
 
-        let change_these_atoms = new_numbers["__ndarray__"][2]
-            .members_mut()
-            .zip(z_coords)
-            .filter(
-                |(e, z)| (e.as_usize().unwrap() == 1) 
-                & (z.as_f64().unwrap() < 20.0)
-            )
-            .map(|(n, _, _)|);
-        for (mut atom, z_level) in change_these_atoms {
-            let mut new: JsonValue = 8u8.into();
-            atom = &mut new;
-            // println!("{} {}", atom.as_usize().unwrap(), z_level.as_f64().unwrap());
+        new_numbers["__ndarray__"][2].clear();
+        for (old_number, z) in zip(old_numbers["__ndarray__"][2].members(), z_coords) {
+            // println!("{} {}", old_number, z);
+            if (old_number.as_usize() == Some(1usize)) & (z.as_f64() < Some(20.0)) {
+                new_numbers["__ndarray__"][2].push(8)
+                .expect("Pushing new number failed.");
+            } else {
+                new_numbers["__ndarray__"][2].push( old_number.clone())
+                .expect("Pushihng old number failed");
+            }
         };
+        
+
+        // let change_these_atoms = new_numbers["__ndarray__"][2]
+        //     .members_mut()
+        //     .zip(z_coords)
+        //     .filter(
+        //         |(e, z)| (e.as_usize().unwrap() == 1) 
+        //         & (z.as_f64().unwrap() < 20.0)
+        //     )
+        //     .map(|(n, _, _)|);
+        // for (mut atom, z_level) in change_these_atoms {
+        //     let mut new: JsonValue = 8u8.into();
+        //     atom = &mut new;
+        //     // println!("{} {}", atom.as_usize().unwrap(), z_level.as_f64().unwrap());
+        // };
         
         println!("Added {} oxygens.", oxygens.len());
         for oxygen in oxygens {
@@ -891,6 +923,7 @@ impl Lattice {
             new_positions["__ndarray__"][2]
                 .push(oxygen.z)
                 .expect("new_positions[\"__ndarray__\"][2].push(oxygen.z)");
+            add_crown(oxygen, &mut new_numbers, &mut new_positions);
         }
         new_numbers["__ndarray__"][0][0] = new_numbers["__ndarray__"][2].len().into();
         new_positions["__ndarray__"][0][0] = new_numbers["__ndarray__"][2].len().into();
@@ -910,6 +943,29 @@ impl Lattice {
         let mut file = File::create(&filename).unwrap();
         file.write_all(export_data.pretty(4).as_bytes()).unwrap();
         println!("Saved {filename}");
+    }
+}
+
+fn add_crown(oxygen: &Oxygen, new_numbers: &mut JsonValue, new_positions: &mut JsonValue) {
+    let new_crown = match oxygen.sitetype {
+        SiteType::Singlet(_) => TRIPLE_CROWN.iter(),
+        SiteType::Midpoint(_)=> DOUBLE_CROWN.iter(),
+        SiteType::Tripoint(_)=> SINGLE_CROWN.iter(),
+    };
+
+    for (x, y, z) in new_crown.tuples() {
+        new_numbers["__ndarray__"][2]
+            .push(1)
+            .expect("Adding to borrowed new_numbers failed");
+        new_positions["__ndarray__"][2]
+            .push(oxygen.x + x)
+            .expect("Adding to borrowed new_positions failed");
+        new_positions["__ndarray__"][2]
+            .push(oxygen.y + y)
+            .expect("Adding to borrowed new_positions failed");
+        new_positions["__ndarray__"][2]
+            .push(oxygen.z + z)
+            .expect("Adding to borrowed new_positions failed");
     }
 }
 

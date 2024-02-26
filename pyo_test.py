@@ -81,8 +81,8 @@ bit_lattice = lattice.get_intermediary()
 filtered_bit = bit_lattice.filtered(noloops)
 print(filtered_bit)
 # exit()
-solutions = bit_lattice.solve(True)
-# solutions = filtered_bit.solve(True)
+# solutions = bit_lattice.solve(True)
+solutions = filtered_bit.solve(True)
 
 progress = tqdm(
     enumerate(solutions),
