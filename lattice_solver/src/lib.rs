@@ -138,7 +138,7 @@ impl BitArraySolution {
     /// assert_eq!(compressed, full);
     /// ```
     /// Shown schematically:
-    /// ```
+    /// ```text
     /// 10 1 10
     /// 1101011000
     /// 1001010000
