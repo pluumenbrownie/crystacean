@@ -34,9 +34,9 @@ def sorting_key(input) -> float:
     return 100 * input["x"] + input["y"]
 
 
-def cull(path: str):
+def cull(path: str, margin: float, postfix: str):
     list_of_files = os.listdir(path)
-    new_path = path + "_unique"
+    new_path = path + "_unique_" + postfix
     os.mkdir(new_path)
     unique_spacings = {}
     unique_files = {}
@@ -92,7 +92,7 @@ def cull(path: str):
                     unique_files[connection_type_count] = [filename]
                     total_amount += 1
                 elif not nearly_in(
-                    oxygen_spacing, unique_spacings[connection_type_count], 0.0001
+                    oxygen_spacing, unique_spacings[connection_type_count], margin
                 ):
                     unique_spacings[connection_type_count].append(oxygen_spacing)
                     unique_files[connection_type_count].append(filename)
@@ -115,4 +115,4 @@ def cull(path: str):
 
 
 if __name__ == "__main__":
-    cull("exports/sizeable")
+    cull("exports/sizeable_remade", 0.2, "2")

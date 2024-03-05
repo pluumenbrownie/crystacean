@@ -299,8 +299,8 @@ def full_lattice_from_basis_vectors(size: int = 1) -> list[tuple[list[float], li
     points = []
     bottom_points = {}
     left_points = {}
-    vec_x = np.array([1.5, 0.0, 0.0])
-    vec_y = np.array([0.75, 1.299038105676658, 0.0])
+    vec_x = np.array([1.5, 0.0, 0.0]) / 1.5 * 3.076
+    vec_y = np.array([0.75, 1.299038105676658, 0.0]) / 1.5 * 3.076
     vec_z = np.array([0.0, 0.0, 1.5])
     
     for x, y in product(range(0, size), range(0, size)):
