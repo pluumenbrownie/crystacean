@@ -588,11 +588,11 @@ impl Lattice {
 
         let last_id = &parsed["ids"][parsed["ids"].len() - 1].to_string();
 
-        let hydrogen_amount = &parsed[last_id]["numbers"]["__ndarray__"][2]
-            .members()
-            .filter_map(|n| n.as_usize())
-            .filter(|n| n == &1)
-            .count();
+        // let hydrogen_amount = &parsed[last_id]["numbers"]["__ndarray__"][2]
+        //     .members()
+        //     .filter_map(|n| n.as_usize())
+        //     .filter(|n| n == &1)
+        //     .count();
 
         let numbers = &parsed[last_id]["positions"]["__ndarray__"][2];
         let atoms = numbers
@@ -601,12 +601,14 @@ impl Lattice {
             .collect_vec()
             .chunks_exact(3)
             .map(|c| c.to_vec())
+            .zip(parsed[last_id]["numbers"]["__ndarray__"][2].members().map(|i| i.as_i32()))
             .collect_vec();
 
         let hydrogenated_ends = atoms
             .iter()
-            .sorted_by(|&a, &b| a[2].total_cmp(&b[2]))
-            .take(hydrogen_amount.div_ceil(2))
+            .filter(|(_, i)| i == &Some(1))
+            .map(|(v, _)| v)
+            .filter(|v| v[2] < 20.0)
             .collect_vec();
 
         let cell = &parsed[last_id]["cell"]["array"]["__ndarray__"][2];
@@ -971,7 +973,7 @@ impl Lattice {
         filename.push("/");
         filename.push(name);
 
-        let mut file = File::create(filename).unwrap();
+        let mut file = File::create(&filename).expect(&*format!("{:?}", &filename));
         file.write_all(data.pretty(4).as_bytes()).unwrap();
     }
 
