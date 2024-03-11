@@ -1047,7 +1047,7 @@ impl Lattice {
             user: parsed[last_id]["user"].clone(),
         };
 
-        let mut file = File::create(&filename).unwrap();
+        let mut file = File::create(&filename).expect("Folder does not exist!");
         file.write_all(export_data.pretty(4).as_bytes()).unwrap();
         println!("Saved {filename}");
     }

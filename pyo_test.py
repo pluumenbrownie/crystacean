@@ -82,11 +82,11 @@ noloops = lattice.no_rings()
 
 bit_lattice = lattice.get_intermediary()
 print(bit_lattice)
-filtered_bit = bit_lattice.filtered(noloops)
+# filtered_bit = bit_lattice.filtered(noloops)
 # print(filtered_bit)
 # exit()
-# solutions = bit_lattice.solve(True)
-solutions = filtered_bit.solve(True)
+solutions = bit_lattice.solve(True)
+# solutions = filtered_bit.solve(True)
 
 progress = tqdm(
     enumerate(solutions),
@@ -98,7 +98,7 @@ progress = tqdm(
 for number, solution in progress:
     solved_lattice = lattice.to_solved_lattice(solution)
     # solved_lattice.export("exports/T6_noloops", f"T6_{number:>06}.json")
-    solved_lattice.export_as_ase_json(f"exports/T6_noloops/T6_{number:>06}.json")
+    solved_lattice.export_as_ase_json(f"exports/T6_loops/T6_{number:>06}.json")
 
     # if number in to_show:
         # solved_lattice.export_as_ase_json(f"exports/sizeable_remade/sizeable_rust_{number:>06}.json")
