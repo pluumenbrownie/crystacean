@@ -443,10 +443,13 @@ if __name__ == '__main__':
         ([7.7, 8.0], []),
     ]
     # big_lattice_points = [point for point in big_lattice_points if point[0] < 12 and point[1] < 12]
-    # filled_lattice = find_ox_sites(bigger_boundry_points)
-    filled_lattice = find_ox_sites_bounds(bigger_boundary_points)
-    filled_lattice.plot_ghost_connections()
-    make_site_plot(filled_lattice, draw_single=True)
+    filled_lattice = find_ox_sites(big_lattice_points)
+    filled_lattice.plot(draw_single=True)
+    # filled_lattice = find_ox_sites_bounds(bigger_boundary_points)
+    # points = full_lattice_from_basis_vectors(size=2)
+    # filled_lattice = find_ox_sites_bounds(points)
+    # filled_lattice.plot_ghost_connections()
+    # make_site_plot(filled_lattice, draw_single=True)
 
     # solved_lattice = fill_oxygen_maxtri(filled_lattice)
     # solved_lattice = fill_oxygen_midonly(filled_lattice)
@@ -457,11 +460,11 @@ if __name__ == '__main__':
     # Use the "just look at it" theorum to select for unique solutions
     # exportset = {0, 1, 2, 3, 25, 26, 37, 70}
     # exportset = {0, 9, 10}
-    for number, lattice in enumerate(solution_list):
-        print(f"Showing {number+1} of {len(solution_list)}")
-        print(f"Energy: {lattice.energy()}")
+    # for number, lattice in enumerate(solution_list):
+    #     print(f"Showing {number+1} of {len(solution_list)}")
+    #     print(f"Energy: {lattice.energy()}")
 
-        reduced = reduce_lattice(lattice)
-        make_site_plot(reduced, draw_single=True)
+    #     reduced = reduce_lattice(lattice)
+    #     make_site_plot(reduced, draw_single=True)
         # if number in exportset:
         #     reduced.export(f"bigger_lattice_{number:0>4}")
