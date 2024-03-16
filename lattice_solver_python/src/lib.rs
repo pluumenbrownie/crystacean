@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 use std::ffi::OsString;
+use std::str::FromStr;
 
 use ::lattice_solver::BitArrayRepresentation as WrappedRepresentation;
 use ::lattice_solver::BitArraySolution as WrappedSolution;
@@ -9,6 +10,13 @@ use ::lattice_solver::SiteFilter as WrappedFilter;
 #[pyclass]
 struct BitArraySolution {
     wrapped: WrappedSolution,
+}
+
+#[pymethods]
+impl BitArraySolution {
+    fn __str__(&self) -> String {
+        self.wrapped.__str__()
+    }
 }
 
 #[pyclass]

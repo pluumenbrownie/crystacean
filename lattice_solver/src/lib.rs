@@ -188,6 +188,10 @@ impl BitArraySolution {
         }
         self.0 = new_vector;
     }
+
+    pub fn __str__(&self) -> String {
+        format!("{}", self.0)
+    }
 }
 
 pub struct BitArrayRepresentation {
