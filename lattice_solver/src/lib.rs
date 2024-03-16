@@ -167,10 +167,15 @@ impl BitArraySolution {
     ///
     /// ```
     /// use lattice_solver::BitArraySolution;
+    /// use fixedbitset::FixedBitSet;
     ///
-    /// let mut compressed = BitArraySolution(fixedbitset::FixedBitSet::with_capacity_and_blocks(4, vec![0b10110]));
-    /// let full = BitArraySolution(fixedbitset::FixedBitSet::with_capacity_and_blocks(6, vec![0b1001010000]));
-    /// let filter = fixedbitset::FixedBitSet::with_capacity_and_blocks(6, vec![0b1101011000]);
+    /// let mut compressed = BitArraySolution(
+    ///     FixedBitSet::with_capacity_and_blocks(4, vec![0b10110])
+    /// );
+    /// let full = BitArraySolution(
+    ///     FixedBitSet::with_capacity_and_blocks(6, vec![0b1001010000])
+    /// );
+    /// let filter = FixedBitSet::with_capacity_and_blocks(6, vec![0b1101011000]);
     ///
     /// compressed.inflate(&filter);
     /// assert_eq!(compressed, full);
