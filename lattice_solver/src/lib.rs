@@ -42,7 +42,7 @@ const DOUBLE_CROWN: [f32; 6] = [
 const SINGLE_CROWN: [f32; 3] = [0.0, 0.0, -1.7];
 
 fn double_crown_rotated(theta: f32) -> [f32; 6] {
-    println!("{theta:?}");
+    // println!("{theta:?}");
     let r = ((2.2252961107321143 - 1.0526814404964109 as f32).powi(2) + (-1.3867293215799141 - -1.0917258490752173 as f32).powi(2)).sqrt();
     [
         r*(theta).cos(),
@@ -56,7 +56,7 @@ fn double_crown_rotated(theta: f32) -> [f32; 6] {
 }
 
 fn triple_crown_rotated(theta: f32) -> [f32; 9] {
-    println!("{theta:?}");
+    // println!("{theta:?}");
     let r = ((-0.000082766 as f32).powi(2) + (-1.397718937 as f32).powi(2)).sqrt();
     [
         r*(theta).cos(),
@@ -242,7 +242,7 @@ impl BitArrayRepresentation {
     }
 
     pub fn filtered(&self, filter: SiteFilter) -> BitArrayRepresentation {
-        println!("{filter:?}");
+        // println!("{filter:?}");
         let mut filter_set = FixedBitSet::with_capacity(self.filled_sites.len());
         filter_set.toggle_range(..);
         for number in filter.wrapped {
@@ -474,7 +474,7 @@ impl Lattice {
         } else {
             distance_margin.powi(2)
         };
-        println!("{node_search_distance:?}");
+        // println!("{node_search_distance:?}");
 
         // Tripoints
         let mut covered_sites = HashSet::new();
@@ -999,7 +999,6 @@ impl Lattice {
 
         new_numbers["__ndarray__"][2].clear();
         for (old_number, z) in zip(old_numbers["__ndarray__"][2].members(), z_coords) {
-            // println!("{} {}", old_number, z);
             if (old_number.as_usize() == Some(1usize)) & (z.as_f64() < Some(20.0)) {
                 new_numbers["__ndarray__"][2]
                     .push(8)
@@ -1011,21 +1010,6 @@ impl Lattice {
             }
         }
 
-        // let change_these_atoms = new_numbers["__ndarray__"][2]
-        //     .members_mut()
-        //     .zip(z_coords)
-        //     .filter(
-        //         |(e, z)| (e.as_usize().unwrap() == 1)
-        //         & (z.as_f64().unwrap() < 20.0)
-        //     )
-        //     .map(|(n, _, _)|);
-        // for (mut atom, z_level) in change_these_atoms {
-        //     let mut new: JsonValue = 8u8.into();
-        //     atom = &mut new;
-        //     // println!("{} {}", atom.as_usize().unwrap(), z_level.as_f64().unwrap());
-        // };
-
-        // println!("Added {} oxygens.", oxygens.len());
         for oxygen in oxygens {
             new_numbers["__ndarray__"][2]
                 .push(14)
