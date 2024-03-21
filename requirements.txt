@@ -1,0 +1,6 @@
+typer
+scipy
+matplotlib
+tqdm
+alive-progress
+ase
