@@ -4,7 +4,6 @@ import json
 from typing import Sequence
 from dataclasses import dataclass, field
 import matplotlib.pylab as plt
-import numpy as np
 
 
 SINGLE_POINT_ENERGY = 1.4
@@ -187,6 +186,16 @@ class FullLattice:
         plt.plot( *points_to_plot(self.tripoints), "s")
         if draw_single:
             plt.plot( *points_to_plot(self.singles), "^", markersize=10) 
+        plt.show()
+
+    def plot_report(self, lattice_size: int, site_size: int):
+        plt.plot( *points_to_plot(self.points), "o", markersize=lattice_size, label="Previous layer")
+        plt.plot( *points_to_plot(self.midpoints), "x", markersize=site_size, label="Midpoint", markeredgewidth=4)
+        plt.plot( *points_to_plot(self.tripoints), "s", markersize=site_size, label="Tripoint")
+        plt.plot( *points_to_plot(self.singles), "^", markersize=site_size, label="Single") 
+        plt.axis('equal')
+        plt.xlabel("x (Å)")
+        plt.ylabel("y (Å)")
         plt.show()
     
     def plot_ghost_connections(self):
