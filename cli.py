@@ -10,6 +10,7 @@ from ase.io import read as aseread
 from classes import from_file as from_file_classes
 from findthosepoints import full_lattice_from_basis_vectors
 from lattice_solver_python import Lattice, from_dft_json
+from cull_results import cull
 
 # Test libraries required for other files.
 import alive_progress, scipy
@@ -266,6 +267,9 @@ def from_dft_folder(
         ),
     ] = False
 ):
+    """
+    Find next layer configurations directly from CP2K DFT results.
+    """
     assert os.path.isdir(dirpath), "Filepath should be a directory."
     dirpath.removesuffix("/")
     save_to.removesuffix("/")
@@ -293,6 +297,36 @@ def from_dft_folder(
 
     os.remove(f"{save_to}/temp/{prefix}.json")
     os.rmdir(f"{save_to}/temp")
+
+
+@app.command()
+def cull_results(
+    dirpath: Annotated[
+        str,
+        typer.Argument(
+            help="The input directory to find interface configurations for."
+        )
+    ],
+    margin: Annotated[
+        float,
+        typer.Argument(
+            help="Minimal deviation needed between structures to be designated as 'unique'."
+        ),
+    ],
+    postfix: Annotated[
+        str,
+        typer.Option(
+            help="Identifier to indicate culled results. When empty, the margin is used."
+        )
+    ] = ""
+):
+    """
+    Remove structures which are translated and/or rotated duplicates of existing ones.
+    """
+    if not postfix:
+        postfix = str(margin).replace(".", "_")
+    cull(dirpath, margin, postfix)
+
     
 
 def ase_json_handler(
