@@ -256,7 +256,7 @@ dependencies = [
 
 [[package]]
 name = "lattice_solver"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "fixedbitset",
  "itertools",
@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "lattice_solver_python"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "lattice_solver",
  "pyo3",
