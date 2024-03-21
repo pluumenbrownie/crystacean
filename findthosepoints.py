@@ -2,10 +2,12 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Sequence
 import matplotlib.pyplot as plt
+from matplotlib import rcParams
 from itertools import combinations, permutations, product
 from scipy.spatial import KDTree
 from dataclasses import dataclass, field
 from classes import *
+import numpy as np
 
 
 def find_ox_sites(lattice: list[list[float]]) -> FullLattice:
@@ -342,7 +344,7 @@ def full_lattice_from_basis_vectors(size: int = 1) -> list[tuple[list[float], li
     # points.append(list((0 + 1)*vec_x + 0*vec_y)[0:2])
     # points.append(list(0*vec_x + (0 + 1)*vec_y)[0:2])
     # points.append(list(1*vec_x + 1*vec_y)[0:2])
-    print(points)
+    # print(points)
     return points
 
 
@@ -442,9 +444,13 @@ if __name__ == '__main__':
         ([7.7, 2.7], []),
         ([7.7, 8.0], []),
     ]
-    # big_lattice_points = [point for point in big_lattice_points if point[0] < 12 and point[1] < 12]
+    big_lattice_points = [point for point in big_lattice_points if point[0] < 12 and point[1] < 9]
+    rcParams.update({'font.size': 11})
+    lattice_size = 10
+    site_size = 16
+
     filled_lattice = find_ox_sites(big_lattice_points)
-    filled_lattice.plot(draw_single=True)
+    filled_lattice.plot_report(lattice_size, site_size)
     # filled_lattice = find_ox_sites_bounds(bigger_boundary_points)
     # points = full_lattice_from_basis_vectors(size=2)
     # filled_lattice = find_ox_sites_bounds(points)
@@ -460,11 +466,11 @@ if __name__ == '__main__':
     # Use the "just look at it" theorum to select for unique solutions
     # exportset = {0, 1, 2, 3, 25, 26, 37, 70}
     # exportset = {0, 9, 10}
-    # for number, lattice in enumerate(solution_list):
-    #     print(f"Showing {number+1} of {len(solution_list)}")
-    #     print(f"Energy: {lattice.energy()}")
+    for number, lattice in enumerate(solution_list):
+        print(f"Showing {number+1} of {len(solution_list)}")
+        print(f"Energy: {lattice.energy()}")
 
-    #     reduced = reduce_lattice(lattice)
-    #     make_site_plot(reduced, draw_single=True)
+        reduced = reduce_lattice(lattice)
+        reduced.plot_report(lattice_size, site_size)
         # if number in exportset:
         #     reduced.export(f"bigger_lattice_{number:0>4}")

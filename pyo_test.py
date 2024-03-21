@@ -67,10 +67,10 @@ bigger_boundary_points = [
 # basis_vectors = [[1.5, 0.0, 0.0], [0.75, 1.299038105676658, 0.0], [0.0, 0.0, 1.5]]
 
 
-custom_boundary_points = full_lattice_from_basis_vectors(size=1)
-lattice = Lattice(custom_boundary_points, 1.1)
+# custom_boundary_points = full_lattice_from_basis_vectors(size=2)
+# lattice = Lattice(custom_boundary_points, 1.1)
 
-# lattice = from_dft_json("DFT_results/T1S.json", 3.5, False)
+lattice = from_dft_json("DFT_results/T1S.json", 3.5, False)
 # lattice.diagnostic_ase()
 # for num, point in enumerate(zip( *lattice.points_to_plot())):
 #     plt.annotate(str(num), (point[0], point[1]))
@@ -97,7 +97,7 @@ print(bit_lattice)
 # exit()
 solutions = bit_lattice.solve(True)
 # solutions = filtered_bit.solve(True)
-# exit()
+exit()
 progress = tqdm(
     enumerate(solutions),
     total=len(solutions),
