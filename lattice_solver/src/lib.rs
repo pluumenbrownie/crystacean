@@ -1,3 +1,9 @@
+#![warn(clippy::pedantic, clippy::nursery)]
+#![allow(
+    clippy::excessive_precision,
+    clippy::unreadable_literal,
+    clippy::cast_possible_truncation
+)]
 // Optimisation Ideas:
 // - Turn current/next generation into hashsets to remove archive requirement
 //     - wont work with depth first
@@ -11,64 +17,69 @@ use itertools::{izip, zip_eq, Itertools};
 use json::{object, JsonValue};
 use kdam::{tqdm, Colour, Spinner};
 use std::{
-    collections::HashSet, f32::consts::PI, ffi::OsString, fs::File, io::{stderr, IsTerminal}, iter::zip, mem, sync::{Arc, RwLock}
+    collections::HashSet,
+    f32::consts::PI,
+    ffi::OsString,
+    fs::File,
+    io::{stderr, IsTerminal},
+    iter::zip,
+    mem,
+    sync::{Arc, RwLock},
 };
 
 use kiddo::{KdTree, SquaredEuclidean};
 use std::io::prelude::*;
 
-const TRIPLE_CROWN: [f32; 9] = [
-    -0.000082766,
-    -1.397718937,
-    -0.517599594,
+// const TRIPLE_CROWN: [f32; 9] = [
+//     -0.000082766,
+//     -1.397718937,
+//     -0.517599594,
 
-    -1.222253196,
-    0.702780512,
-    -0.517599594,
+//     -1.222253196,
+//     0.702780512,
+//     -0.517599594,
 
-    1.204777673,
-    0.711865236,
-    -0.517599594,
-];
-const DOUBLE_CROWN: [f32; 6] = [
-    2.2252961107321143 - 1.0526814404964109,
-    -1.3867293215799141 - -1.0917258490752173,
-    -(9.26392293591872 - 8.41953003801284),
+//     1.204777673,
+//     0.711865236,
+//     -0.517599594,
+// ];
+// const DOUBLE_CROWN: [f32; 6] = [
+//     2.2252961107321143 - 1.0526814404964109,
+//     -1.3867293215799141 - -1.0917258490752173,
+//     -(9.26392293591872 - 8.41953003801284),
 
-    2.2252961107321143 - 3.3223088674933625,
-    -1.3867293215799141 - -1.6248356621955473,
-    -(9.26392293591872 - 8.313286837087986),
-];
+//     2.2252961107321143 - 3.3223088674933625,
+//     -1.3867293215799141 - -1.6248356621955473,
+//     -(9.26392293591872 - 8.313286837087986),
+// ];
 const SINGLE_CROWN: [f32; 3] = [0.0, 0.0, -1.7];
 
 fn double_crown_rotated(theta: f32) -> [f32; 6] {
     // println!("{theta:?}");
-    let r = ((2.2252961107321143 - 1.0526814404964109 as f32).powi(2) + (-1.3867293215799141 - -1.0917258490752173 as f32).powi(2)).sqrt();
+    let r = (2.2252961107321143 - 1.0526814404964109_f32)
+        .hypot(-1.3867293215799141 - -1.0917258490752173_f32);
     [
-        r*(theta).cos(),
-        r*(theta).sin(),
+        r * (theta).cos(),
+        r * (theta).sin(),
         -(9.26392293591872 - 8.41953003801284),
-
-        r*(theta + PI).cos(),
-        r*(theta + PI).sin(),
+        r * (theta + PI).cos(),
+        r * (theta + PI).sin(),
         -(9.26392293591872 - 8.313286837087986),
     ]
 }
 
+#[allow(clippy::suboptimal_flops)]
 fn triple_crown_rotated(theta: f32) -> [f32; 9] {
-    // println!("{theta:?}");
-    let r = ((-0.000082766 as f32).powi(2) + (-1.397718937 as f32).powi(2)).sqrt();
+    let r = (-0.000082766_f32).hypot(-1.397718937_f32);
     [
-        r*(theta).cos(),
-        r*(theta).sin(),
+        r * (theta).cos(),
+        r * (theta).sin(),
         -0.517599594,
-
-        r*(theta + (2.0/3.0 * PI)).cos(),
-        r*(theta + (2.0/3.0 * PI)).sin(),
+        r * (theta + (2.0 / 3.0 * PI)).cos(),
+        r * (theta + (2.0 / 3.0 * PI)).sin(),
         -0.517599594,
-
-        r*(theta - (2.0/3.0 * PI)).cos(),
-        r*(theta - (2.0/3.0 * PI)).sin(),
+        r * (theta - (2.0 / 3.0 * PI)).cos(),
+        r * (theta - (2.0 / 3.0 * PI)).sin(),
         -0.517599594,
     ]
 }
@@ -89,8 +100,8 @@ struct LatticePoint {
 }
 
 impl LatticePoint {
-    fn new(x: f32, y: f32, z: f32, ghost_to: Option<Arc<LatticePoint>>) -> Arc<Self> {
-        Arc::new(LatticePoint {
+    fn new(x: f32, y: f32, z: f32, ghost_to: Option<Arc<Self>>) -> Arc<Self> {
+        Arc::new(Self {
             x,
             y,
             z,
@@ -100,13 +111,13 @@ impl LatticePoint {
     }
 
     fn get_connections(&self) -> &RwLock<Vec<OxygenIndex>> {
-        match &self.ghost_to {
-            None => &self.connected_to,
-            Some(point) => &point.connected_to,
-        }
+        self.ghost_to
+            .as_ref()
+            .map_or(&self.connected_to, |_| &self.connected_to)
     }
 
-    fn distance_squared_to(&self, other: &LatticePoint) -> f32 {
+    #[allow(clippy::suboptimal_flops)]
+    fn distance_squared_to(&self, other: &Self) -> f32 {
         (self.x - other.x).powi(2) + (self.y - other.y).powi(2) + (self.z - other.z).powi(2)
     }
 }
@@ -121,8 +132,8 @@ struct Oxygen {
 }
 
 impl Oxygen {
-    fn new(x: f32, y: f32, z: f32, sitetype: SiteType) -> Self {
-        Oxygen {
+    const fn new(x: f32, y: f32, z: f32, sitetype: SiteType) -> Self {
+        Self {
             x,
             y,
             z,
@@ -158,7 +169,7 @@ struct Midpoint([LatticeIndex; 2]);
 #[derive(Clone, Copy)]
 struct Tripoint([LatticeIndex; 3]);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct BitArraySolution(pub FixedBitSet);
 
 impl BitArraySolution {
@@ -194,6 +205,7 @@ impl BitArraySolution {
         self.0 = new_vector;
     }
 
+    #[must_use]
     pub fn __str__(&self) -> String {
         format!("{}", self.0)
     }
@@ -209,7 +221,79 @@ pub struct BitArrayRepresentation {
 }
 
 impl BitArrayRepresentation {
-    fn matrix_vector_multiply(&self, vector: &FixedBitSet) -> FixedBitSet {
+    /// Create a `BitArrayRepresentation` for testing purpouses.
+    // #[cfg(doctest)]
+    #[must_use]
+    pub fn create_debug(
+        filled_sites: FixedBitSet,
+        exclusion_matrix: Vec<FixedBitSet>,
+        tripoint_mask: FixedBitSet,
+        midpoint_mask: FixedBitSet,
+        singlet_mask: FixedBitSet,
+        filter: Option<FixedBitSet>,
+    ) -> Self {
+        Self {
+            filled_sites,
+            exclusion_matrix,
+            tripoint_mask,
+            midpoint_mask,
+            singlet_mask,
+            filter,
+        }
+    }
+
+    /// Performes a binary matrix-vector multiply between `self.exclusion_matrix`
+    /// and the given solution `vector`. This method is used in `self.get_possibilities`
+    /// to reveal the available silicon sites for a given solution.
+    ///
+    /// In this method, the input matrix is bitwise `AND`ed with each column of
+    /// the exclusion matrix. The bits of the output vector are then set to 0
+    /// if an AND operation between the input vector and the corresponding column
+    /// of the matrix contain any ones.
+    ///
+    /// This method should not be used directly, use `self.get_possibilities` instead.
+    ///
+    /// ## Example:
+    /// ```
+    /// # use lattice_solver::{BitArraySolution, BitArrayRepresentation};
+    /// # use fixedbitset::FixedBitSet;
+    /// #
+    /// let bit_array_repr = BitArrayRepresentation::create_debug(
+    ///     //                    11000
+    ///     //                    11000
+    ///     // exclusion_matrix = 00110
+    ///     //                    00110
+    ///     //                    00001
+    ///     # FixedBitSet::with_capacity_and_blocks(5, vec![0b00000]),
+    ///     # vec![
+    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]),
+    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]),
+    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b01100]),
+    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b01100]),
+    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b10000]),
+    ///     # ],
+    ///     # FixedBitSet::new(),
+    ///     # FixedBitSet::new(),
+    ///     # FixedBitSet::new(),
+    ///     # None
+    /// );
+    ///
+    /// let potential_solution = FixedBitSet::with_capacity_and_blocks(5, vec![0b11000]);
+    /// let available_sites = bit_array_repr.matrix_vector_multiply(&potential_solution);
+    ///
+    /// let expected_answer = FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]);
+    /// assert_eq!(available_sites, expected_answer);
+    /// ```
+    /// Shown schematically:
+    /// ```text
+    /// 11000     0     1
+    /// 11000     0     1
+    /// 00110  x  0  =  0
+    /// 00110     1     0
+    /// 00001     1     0
+    /// ```
+    #[must_use]
+    pub fn matrix_vector_multiply(&self, vector: &FixedBitSet) -> FixedBitSet {
         let mut output_vector = FixedBitSet::with_capacity(vector.len());
         for bit_nr in 0..output_vector.len() {
             let mut enabled = true;
@@ -225,6 +309,55 @@ impl BitArrayRepresentation {
         output_vector
     }
 
+    /// Returns the valid available sites for the given `vector`.
+    ///
+    /// The valid sites are determined by:
+    /// 1. Obtaining available sites by using `self.matrix_vector_multiply`.
+    /// 1. available sites are checked with tripoint and midpoint mask.
+    ///     - if tripoints or midpoints are available, singlet possibilities are
+    ///       masked out before the results vector is returned.
+    ///
+    /// ## Example:
+    /// ```
+    /// # use lattice_solver::{BitArraySolution, BitArrayRepresentation};
+    /// # use fixedbitset::FixedBitSet;
+    /// #
+    /// let bit_array_repr = BitArrayRepresentation::create_debug(
+    ///     //                    11000
+    ///     //                    11000
+    ///     // exclusion_matrix = 00110
+    ///     //                    00110
+    ///     //                    00001
+    ///     # FixedBitSet::with_capacity_and_blocks(5, vec![0b00000]),
+    ///     # vec![
+    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]),
+    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]),
+    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b01100]),
+    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b01100]),
+    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b10000]),
+    ///     # ],
+    ///     // tripoint, midpoint and singlet masks:
+    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]),
+    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b01100]),
+    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b10000]),
+    ///     # None
+    /// );
+    ///
+    /// let tripoint_possible =
+    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b01000]);
+    /// let tripoint_possible_sites = bit_array_repr.get_possibilities(&tripoint_possible);
+    /// let tripoint_possible_answer =
+    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]);
+    /// assert_eq!(tripoint_possible_sites, tripoint_possible_answer);
+    ///
+    /// let tripoint_impossible =
+    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b01001]);
+    /// let tripoint_impossible_sites = bit_array_repr.get_possibilities(&tripoint_impossible);
+    /// let tripoint_impossible_answer =
+    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b10000]);
+    /// assert_eq!(tripoint_impossible_sites, tripoint_impossible_answer);
+    /// ```
+    #[must_use]
     pub fn get_possibilities(&self, vector: &FixedBitSet) -> FixedBitSet {
         let non_singlet_mask: FixedBitSet = &self.tripoint_mask | &self.midpoint_mask;
         let possibilities: FixedBitSet = self.matrix_vector_multiply(vector);
@@ -237,11 +370,14 @@ impl BitArrayRepresentation {
         }
     }
 
+    /// Returns a clone of `self.filled_sites`.
+    #[must_use]
     pub fn get_bitarray(&self) -> FixedBitSet {
         self.filled_sites.clone()
     }
 
-    pub fn filtered(&self, filter: SiteFilter) -> BitArrayRepresentation {
+    #[must_use]
+    pub fn filtered(&self, filter: SiteFilter) -> Self {
         // println!("{filter:?}");
         let mut filter_set = FixedBitSet::with_capacity(self.filled_sites.len());
         filter_set.toggle_range(..);
@@ -267,13 +403,13 @@ impl BitArrayRepresentation {
             for (col_number, old_col_number) in filter_set.ones().enumerate() {
                 new_matrix_row.set(
                     col_number,
-                    self.exclusion_matrix[old_number][old_col_number].into(),
+                    self.exclusion_matrix[old_number][old_col_number],
                 );
             }
             exclusion_matrix.push(new_matrix_row);
         }
 
-        BitArrayRepresentation {
+        Self {
             filled_sites,
             exclusion_matrix,
             tripoint_mask,
@@ -283,6 +419,10 @@ impl BitArrayRepresentation {
         }
     }
 
+    /// Starts the solving process.
+    ///
+    /// `find_all` can be set to `true` to find all
+    #[must_use]
     pub fn solve(&self, find_all: bool) -> Vec<BitArraySolution> {
         let test_lattice = self.filled_sites.clone();
 
@@ -335,28 +475,29 @@ impl BitArrayRepresentation {
         solutions
     }
 
+    #[must_use]
     pub fn __str__(&self) -> String {
         let mut output = String::from("BitArrayRepresentation: {\n");
 
         output += format!("  filled_sites = \n    {}\n", self.filled_sites).as_str();
         output += "  exclusion_matrix = \n";
         for (number, row) in self.exclusion_matrix.iter().enumerate() {
-            output += format!("{number:5}. {}\n", row).as_str();
+            output += format!("{number:5}. {row}\n").as_str();
         }
         output += format!("  tripoint_mask = \n    {}\n", self.tripoint_mask).as_str();
         output += format!("  midpoint_mask = \n    {}\n", self.midpoint_mask).as_str();
         output += format!("  singlet_mask = \n    {}\n", self.singlet_mask).as_str();
-        output += format!("  filter = \n    ").as_str();
-        output += match &self.filter {
-            None => "None".into(),
-            Some(fbs) => format!("{}", fbs),
-        }
-        .as_str();
+        output += "  filter = \n    ";
+        output += self.filter
+            .as_ref()
+            .map_or_else(|| "None".into(), |fbs| format!("{fbs}"))
+            .as_str();
         output += "\n}";
 
         output
     }
 
+    #[must_use]
     pub fn __repr__(&self) -> String {
         format!("BitArrayRepresentation[{}]", self.filled_sites)
     }
@@ -368,8 +509,9 @@ pub struct SiteFilter {
 }
 
 impl SiteFilter {
-    pub fn empty() -> Self {
-        SiteFilter { wrapped: vec![] }
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self { wrapped: vec![] }
     }
 }
 
@@ -382,7 +524,7 @@ pub struct Lattice {
 impl Lattice {
     /// Create an empty `Lattice`
     fn new() -> Self {
-        Lattice {
+        Self {
             points: vec![],
             oxygens: vec![],
             source_file: None,
@@ -404,6 +546,8 @@ impl Lattice {
         for oxygen in &mut self.oxygens {
             for connection in oxygen.sitetype.iter() {
                 let point = &self.points[connection.0];
+
+                #[allow(clippy::significant_drop_in_scrutinee)]
                 for ox_con in point.get_connections().read().unwrap().iter() {
                     oxygen.exclusions.push(*ox_con);
                 }
@@ -444,7 +588,8 @@ impl Lattice {
         }
     }
 
-    /// distance_margin should be 1.1 for 2D, 1.4 for 3D
+    /// `distance_margin` should be 1.1 for 2D, 1.4 for 3D
+    #[must_use]
     pub fn python_new(
         input_lattice: Vec<(Vec<f32>, Vec<Vec<f32>>)>,
         distance_margin: f32,
@@ -474,111 +619,10 @@ impl Lattice {
         } else {
             distance_margin.powi(2)
         };
-        // println!("{node_search_distance:?}");
 
-        // Tripoints
-        let mut covered_sites = HashSet::new();
-        for (number, silicon) in out_lattice.points.iter().enumerate() {
-            let mut close_points = kdtree.within::<SquaredEuclidean>(
-                &[silicon.x, silicon.y, silicon.z],
-                node_search_distance,
-            );
-            // Sort results on lattice number
-            close_points.sort_by_key(|p| p.item);
-            let sites = close_points
-                .iter()
-                .filter(|s| s.item as usize != number)
-                .combinations(2)
-                .filter(|a| {
-                    let mut identifier = [number as u64, a[0].item, a[1].item];
-                    identifier.sort();
-                    covered_sites.insert(identifier)
-                })
-                .filter(|a| {
-                    out_lattice.points[a[0].item as usize].x
-                        != out_lattice.points[a[1].item as usize].x
-                })
-                .filter(|a| {
-                    out_lattice.points[number].ghost_to.is_none()
-                        || out_lattice.points[a[0].item as usize].ghost_to.is_none()
-                        || out_lattice.points[a[1].item as usize].ghost_to.is_none()
-                })
-                .filter(|a| {
-                    out_lattice.points[a[0].item as usize]
-                        .distance_squared_to(&out_lattice.points[a[1].item as usize])
-                        <= node_search_distance
-                });
-
-            for site in sites {
-                let x = (out_lattice.points[number].x
-                    + out_lattice.points[site[0].item as usize].x
-                    + out_lattice.points[site[1].item as usize].x)
-                    / 3.0;
-                let y = (out_lattice.points[number].y
-                    + out_lattice.points[site[0].item as usize].y
-                    + out_lattice.points[site[1].item as usize].y)
-                    / 3.0;
-                let z = (out_lattice.points[number].z
-                    + out_lattice.points[site[0].item as usize].z
-                    + out_lattice.points[site[1].item as usize].z)
-                    / 3.0
-                    - 1.1;
-                let sitetype = SiteType::Tripoint(Tripoint([
-                    LatticeIndex(number),
-                    LatticeIndex(site[0].item as usize),
-                    LatticeIndex(site[1].item as usize),
-                ]));
-                out_lattice.oxygens.push(Oxygen::new(x, y, z, sitetype))
-            }
-        }
-
-        // Midpoints
-        for (number, silicon) in out_lattice.points.iter().enumerate() {
-            let mut close_points = kdtree.within::<SquaredEuclidean>(
-                &[silicon.x, silicon.y, silicon.z],
-                node_search_distance,
-            );
-            // Sort results on lattice number
-            close_points.sort_by_key(|p| p.item);
-            let sites = close_points
-                .iter()
-                .skip(1)
-                .filter(|s| s.item as usize > number)
-                .filter(|s| {
-                    out_lattice.points[number].ghost_to.is_none()
-                        || out_lattice.points[s.item as usize].ghost_to.is_none()
-                });
-
-            for site in sites {
-                let x =
-                    (out_lattice.points[number].x + out_lattice.points[site.item as usize].x) / 2.0;
-                let y =
-                    (out_lattice.points[number].y + out_lattice.points[site.item as usize].y) / 2.0;
-                let z = (out_lattice.points[number].z + out_lattice.points[site.item as usize].z)
-                    / 2.0
-                    - 1.4;
-                let sitetype = SiteType::Midpoint(Midpoint([
-                    LatticeIndex(number),
-                    LatticeIndex(site.item as usize),
-                ]));
-                out_lattice.oxygens.push(Oxygen::new(x, y, z, sitetype))
-            }
-        }
-
-        // Singles
-        for (number, silicon) in out_lattice
-            .points
-            .iter()
-            .enumerate()
-            .filter(|s| s.1.ghost_to.is_none())
-        {
-            out_lattice.oxygens.push(Oxygen::new(
-                silicon.x,
-                silicon.y,
-                silicon.z - 1.7,
-                SiteType::Singlet(Singlet([LatticeIndex(number)])),
-            ));
-        }
+        insert_tripoints(&mut out_lattice, &kdtree, node_search_distance);
+        insert_midpoints(&mut out_lattice, &kdtree, node_search_distance);
+        insert_singles(&mut out_lattice);
 
         out_lattice.generate_exclusions();
         out_lattice
@@ -588,6 +632,13 @@ impl Lattice {
         self.source_file = Some(source_file);
     }
 
+    /// Create a `Lattice` from an ASE json file.
+    ///
+    /// Usefull for creating secondary layers on top of structures processed with CP2K.
+    ///
+    /// # Panics
+    /// Will panic when supplied with missing or invalid file.
+    #[must_use]
     pub fn from_dft_json(filename: String, distance_margin: f32, autodetect_margin: bool) -> Self {
         let mut buffer = String::new();
         let mut file = File::open(filename).expect("Opening file failed.");
@@ -609,8 +660,12 @@ impl Lattice {
             .map(|j| j.as_f32().unwrap())
             .collect_vec()
             .chunks_exact(3)
-            .map(|c| c.to_vec())
-            .zip(parsed[last_id]["numbers"]["__ndarray__"][2].members().map(|i| i.as_i32()))
+            .map(<[f32]>::to_vec)
+            .zip(
+                parsed[last_id]["numbers"]["__ndarray__"][2]
+                    .members()
+                    .map(json::JsonValue::as_i32),
+            )
             .collect_vec();
 
         let hydrogenated_ends = atoms
@@ -658,12 +713,16 @@ impl Lattice {
             input_lattice
         };
 
-        let mut lattice = Lattice::python_new(input_lattice, distance_margin, autodetect_margin);
+        let mut lattice = Self::python_new(input_lattice, distance_margin, autodetect_margin);
         lattice.add_source_file(parsed.clone());
 
         lattice
     }
 
+    /// Output the `Lattice` for diagnostic purpouses.
+    ///
+    /// # Panics
+    /// Can panic when `Lattice` was not created from file or file writing fails.
     pub fn diagnostic_ase(&self) {
         let parsed = self.source_file.as_ref().unwrap();
         let oxygens = &self.oxygens;
@@ -707,6 +766,11 @@ impl Lattice {
         file.write_all(export_data.pretty(4).as_bytes()).unwrap();
     }
 
+    /// Returns a numbered list of ring locations.
+    ///
+    /// # Panics
+    /// Can panic when `Lattice` was not created from file.
+    #[must_use]
     pub fn no_rings_plot(&self) -> Vec<(usize, f32, f32)> {
         let parsed = self.source_file.as_ref().unwrap();
 
@@ -718,7 +782,7 @@ impl Lattice {
             .map(|j| j.as_f32().unwrap())
             .collect_vec()
             .chunks_exact(3)
-            .map(|c| c.to_vec())
+            .map(<[f32]>::to_vec)
             .collect_vec();
 
         let top_silicon_locations = atoms
@@ -738,7 +802,7 @@ impl Lattice {
 
             for (number, atom) in top_silicon_locations.iter().enumerate() {
                 let close_points = points_tree.within::<SquaredEuclidean>(atom, 1.7f32.powi(2));
-                println!("{:?} --- {:?}", atom, close_points);
+                println!("{atom:?} --- {close_points:?}");
                 for point in close_points {
                     point_group_vector[point.item as usize] = number;
                 }
@@ -755,6 +819,11 @@ impl Lattice {
         .collect_vec()
     }
 
+    /// Create a `SiteFilter` for .
+    ///
+    /// # Panics
+    /// Can panic when `Lattice` was not created from file.
+    #[must_use]
     pub fn no_rings(&self) -> SiteFilter {
         let parsed = self.source_file.as_ref().unwrap();
 
@@ -766,7 +835,7 @@ impl Lattice {
             .map(|j| j.as_f32().unwrap())
             .collect_vec()
             .chunks_exact(3)
-            .map(|c| c.to_vec())
+            .map(<[f32]>::to_vec)
             .collect_vec();
 
         let top_silicon_locations = atoms
@@ -834,6 +903,7 @@ impl Lattice {
     /// ```python
     /// plt.plot(*solved_lattice.points_to_plot(), "o")
     /// ```
+    #[must_use]
     pub fn points_to_plot(&self) -> (Vec<f32>, Vec<f32>) {
         let x_points = self.points.iter().map(|p| p.x).collect_vec();
         let y_points = self.points.iter().map(|p| p.y).collect_vec();
@@ -846,6 +916,7 @@ impl Lattice {
     /// ```python
     /// plt.plot(*solved_lattice.oxygens_to_plot(), "o")
     /// ```
+    #[must_use]
     pub fn oxygens_to_plot(&self) -> (Vec<f32>, Vec<f32>) {
         let x_points = self.oxygens.iter().map(|p| p.x).collect_vec();
         let y_points = self.oxygens.iter().map(|p| p.y).collect_vec();
@@ -858,6 +929,7 @@ impl Lattice {
     /// ```python
     /// plt.plot(*solved_lattice.tripoints_to_plot(), "o")
     /// ```
+    #[must_use]
     pub fn tripoints_to_plot(&self) -> (Vec<f32>, Vec<f32>) {
         let x_points = self
             .oxygens
@@ -880,6 +952,7 @@ impl Lattice {
     /// ```python
     /// plt.plot(*solved_lattice.midpoints_to_plot(), "o")
     /// ```
+    #[must_use]
     pub fn midpoints_to_plot(&self) -> (Vec<f32>, Vec<f32>) {
         let x_points = self
             .oxygens
@@ -902,6 +975,7 @@ impl Lattice {
     /// ```python
     /// plt.plot(*solved_lattice.singlets_to_plot(), "o")
     /// ```
+    #[must_use]
     pub fn singlets_to_plot(&self) -> (Vec<f32>, Vec<f32>) {
         let x_points = self
             .oxygens
@@ -920,12 +994,14 @@ impl Lattice {
 
     /// Generates a more efficient representation of the lattice
     /// problem for the given lattice.
+    #[must_use]
     pub fn get_intermediary(&self) -> BitArrayRepresentation {
         self.generate_intermediary()
     }
 
     /// Returns a solved version of the lattice. Usefull for plotting
     /// and exporting.
+    #[must_use]
     pub fn to_solved_lattice(&self, solution: &BitArraySolution) -> Self {
         let mut solved_oxygens = vec![];
         for number in 0..self.oxygens.len() {
@@ -933,7 +1009,7 @@ impl Lattice {
                 solved_oxygens.push(self.oxygens[number].clone());
             }
         }
-        Lattice {
+        Self {
             points: self.points.clone(),
             oxygens: solved_oxygens,
             source_file: self.source_file.clone(),
@@ -944,7 +1020,10 @@ impl Lattice {
     ///
     /// - path must be a valid path name.
     /// - name should end with ".json".
-    pub fn export(&self, path: OsString, name: String) {
+    ///
+    /// # Panics
+    /// Can panic when path is invalid.
+    pub fn export(&self, path: &OsString, name: String) {
         let mut data = json::JsonValue::new_object();
         {
             let mut points = vec![];
@@ -982,11 +1061,18 @@ impl Lattice {
         filename.push("/");
         filename.push(name);
 
-        let mut file = File::create(&filename).expect(&*format!("{:?}", &filename));
+        let mut file = File::create(&filename).unwrap_or_else(|_| panic!("{:?}", &filename));
+
         file.write_all(data.pretty(4).as_bytes()).unwrap();
     }
 
-    pub fn export_as_ase_json(&self, filename: String) {
+    /// Export the found solution as a json file, which can be converted to other
+    /// formats with ASE.
+    ///
+    /// # Panics
+    /// Can panic when `Lattice` was not created from file or filename points to
+    /// invalid path.
+    pub fn export_as_ase_json(&self, filename: &String) {
         let parsed = self.source_file.as_ref().unwrap();
         let oxygens = &self.oxygens;
         let last_id = &parsed["ids"][parsed["ids"].len() - 1].to_string();
@@ -1040,28 +1126,34 @@ impl Lattice {
             user: parsed[last_id]["user"].clone(),
         };
 
-        let mut file = File::create(&filename).expect("Folder does not exist!");
+        let mut file = File::create(filename).expect("Folder does not exist!");
         file.write_all(export_data.pretty(4).as_bytes()).unwrap();
         println!("Saved {filename}");
     }
 
-    fn add_crown(&self, oxygen: &Oxygen, new_numbers: &mut JsonValue, new_positions: &mut JsonValue) {
+    fn add_crown(
+        &self,
+        oxygen: &Oxygen,
+        new_numbers: &mut JsonValue,
+        new_positions: &mut JsonValue,
+    ) {
         let double_crown;
         let single_crown;
         let new_crown = match oxygen.sitetype {
             SiteType::Singlet(_) => {
                 single_crown = triple_crown_rotated(0.0);
                 single_crown.iter()
-            },
+            }
             SiteType::Midpoint(p) => {
-                double_crown = double_crown_rotated(
-                    double_angle(&self.points[p.0[0].0], &self.points[p.0[1].0])
-                );
+                double_crown = double_crown_rotated(double_angle(
+                    &self.points[p.0[0].0],
+                    &self.points[p.0[1].0],
+                ));
                 double_crown.iter()
             }
             SiteType::Tripoint(_) => SINGLE_CROWN.iter(),
         };
-    
+
         for (x, y, z) in new_crown.tuples() {
             new_numbers["__ndarray__"][2]
                 .push(1)
@@ -1079,8 +1171,116 @@ impl Lattice {
     }
 }
 
+fn insert_singles(out_lattice: &mut Lattice) {
+    for (number, silicon) in out_lattice
+        .points
+        .iter()
+        .enumerate()
+        .filter(|s| s.1.ghost_to.is_none())
+    {
+        out_lattice.oxygens.push(Oxygen::new(
+            silicon.x,
+            silicon.y,
+            silicon.z - 1.7,
+            SiteType::Singlet(Singlet([LatticeIndex(number)])),
+        ));
+    }
+}
+
+fn insert_midpoints(
+    out_lattice: &mut Lattice,
+    kdtree: &kiddo::float::kdtree::KdTree<f32, u64, 3, 32, u32>,
+    node_search_distance: f32,
+) {
+    for (number, silicon) in out_lattice.points.iter().enumerate() {
+        let mut close_points = kdtree
+            .within::<SquaredEuclidean>(&[silicon.x, silicon.y, silicon.z], node_search_distance);
+        // Sort results on lattice number
+        close_points.sort_by_key(|p| p.item);
+        let sites = close_points
+            .iter()
+            .skip(1)
+            .filter(|s| s.item as usize > number)
+            .filter(|s| {
+                out_lattice.points[number].ghost_to.is_none()
+                    || out_lattice.points[s.item as usize].ghost_to.is_none()
+            });
+
+        for site in sites {
+            let x = (out_lattice.points[number].x + out_lattice.points[site.item as usize].x) / 2.0;
+            let y = (out_lattice.points[number].y + out_lattice.points[site.item as usize].y) / 2.0;
+            let z = (out_lattice.points[number].z + out_lattice.points[site.item as usize].z) / 2.0
+                - 1.4;
+            let sitetype = SiteType::Midpoint(Midpoint([
+                LatticeIndex(number),
+                LatticeIndex(site.item as usize),
+            ]));
+            out_lattice.oxygens.push(Oxygen::new(x, y, z, sitetype));
+        }
+    }
+}
+
+#[allow(clippy::float_cmp)]
+fn insert_tripoints(
+    out_lattice: &mut Lattice,
+    kdtree: &kiddo::float::kdtree::KdTree<f32, u64, 3, 32, u32>,
+    node_search_distance: f32,
+) {
+    let mut covered_sites = HashSet::new();
+    for (number, silicon) in out_lattice.points.iter().enumerate() {
+        let mut close_points = kdtree
+            .within::<SquaredEuclidean>(&[silicon.x, silicon.y, silicon.z], node_search_distance);
+        // Sort results on lattice number
+        close_points.sort_by_key(|p| p.item);
+        let sites = close_points
+            .iter()
+            .filter(|s| s.item as usize != number)
+            .combinations(2)
+            .filter(|a| {
+                let mut identifier = [number as u64, a[0].item, a[1].item];
+                identifier.sort_unstable();
+                covered_sites.insert(identifier)
+            })
+            .filter(|a| {
+                out_lattice.points[a[0].item as usize].x != out_lattice.points[a[1].item as usize].x
+            })
+            .filter(|a| {
+                out_lattice.points[number].ghost_to.is_none()
+                    || out_lattice.points[a[0].item as usize].ghost_to.is_none()
+                    || out_lattice.points[a[1].item as usize].ghost_to.is_none()
+            })
+            .filter(|a| {
+                out_lattice.points[a[0].item as usize]
+                    .distance_squared_to(&out_lattice.points[a[1].item as usize])
+                    <= node_search_distance
+            });
+
+        for site in sites {
+            let x = (out_lattice.points[number].x
+                + out_lattice.points[site[0].item as usize].x
+                + out_lattice.points[site[1].item as usize].x)
+                / 3.0;
+            let y = (out_lattice.points[number].y
+                + out_lattice.points[site[0].item as usize].y
+                + out_lattice.points[site[1].item as usize].y)
+                / 3.0;
+            let z = (out_lattice.points[number].z
+                + out_lattice.points[site[0].item as usize].z
+                + out_lattice.points[site[1].item as usize].z)
+                / 3.0
+                - 1.1;
+            let sitetype = SiteType::Tripoint(Tripoint([
+                LatticeIndex(number),
+                LatticeIndex(site[0].item as usize),
+                LatticeIndex(site[1].item as usize),
+            ]));
+            out_lattice.oxygens.push(Oxygen::new(x, y, z, sitetype));
+        }
+    }
+}
+
 fn double_angle(p1: &LatticePoint, p2: &LatticePoint) -> f32 {
-    PI - ((p2.y-p1.y) / ((p2.x-p1.x).powi(2)+(p2.y-p1.y).powi(2)).sqrt() ).acos()
+    PI - ((p2.y - p1.y) / (p2.x - p1.x).hypot(p2.y - p1.y)).acos()
 }
 
 fn create_silicon_lattice(lattice_3d: Vec<(Vec<f32>, Vec<Vec<f32>>)>) -> Lattice {
@@ -1096,12 +1296,12 @@ fn create_silicon_lattice(lattice_3d: Vec<(Vec<f32>, Vec<Vec<f32>>)>) -> Lattice
                 ghost[1],
                 ghost[2],
                 Some(new_point.clone()),
-            ))
+            ));
         }
     }
     out_lattice
         .points
-        .sort_by_key(|p| (100.0 * p.x + p.y).round() as u32);
+        .sort_by_key(|p| 100.0f32.mul_add(p.x, p.y).round() as i32);
     out_lattice
 }
 
