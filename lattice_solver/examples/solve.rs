@@ -38,7 +38,7 @@ fn main() {
         (vec![3.75, 3.897114317029974], vec![]),
     ];
     let lattice = Lattice::python_new(lattice_points, 1.1, true);
-    let bit_lattice = lattice.get_intermediary();
+    let bit_lattice = lattice.get_intermediary(2);
 
     let _ = bit_lattice.solve(true);
 }

@@ -13,18 +13,11 @@
 // - get profiler to work
 
 use fixedbitset::FixedBitSet;
-use itertools::{izip, zip_eq, Itertools};
+use itertools::{izip, Itertools};
 use json::{object, JsonValue};
 use kdam::{tqdm, Colour, Spinner};
 use std::{
-    collections::HashSet,
-    f32::consts::PI,
-    ffi::OsString,
-    fs::File,
-    io::{stderr, IsTerminal},
-    iter::zip,
-    mem,
-    sync::{Arc, RwLock},
+    collections::HashSet, f32::consts::PI, ffi::OsString, fs::File, io::{stderr, IsTerminal}, iter::zip, mem, sync::{Arc, RwLock}
 };
 
 use kiddo::{KdTree, SquaredEuclidean};
@@ -218,6 +211,12 @@ pub struct BitArrayRepresentation {
     midpoint_mask: FixedBitSet,
     singlet_mask: FixedBitSet,
     filter: Option<FixedBitSet>,
+    options: BitArraySettings,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BitArraySettings {
+    pub max_singlets: usize,
 }
 
 impl BitArrayRepresentation {
@@ -231,6 +230,7 @@ impl BitArrayRepresentation {
         midpoint_mask: FixedBitSet,
         singlet_mask: FixedBitSet,
         filter: Option<FixedBitSet>,
+        options: BitArraySettings
     ) -> Self {
         Self {
             filled_sites,
@@ -239,6 +239,7 @@ impl BitArrayRepresentation {
             midpoint_mask,
             singlet_mask,
             filter,
+            options
         }
     }
 
@@ -296,15 +297,7 @@ impl BitArrayRepresentation {
     pub fn matrix_vector_multiply(&self, vector: &FixedBitSet) -> FixedBitSet {
         let mut output_vector = FixedBitSet::with_capacity(vector.len());
         for bit_nr in 0..output_vector.len() {
-            let mut enabled = true;
-            // equal to: (vector & &self.exclusion_matrix[bit_nr]).is_clear()
-            for (v, m) in zip_eq(vector.as_slice(), self.exclusion_matrix[bit_nr].as_slice()) {
-                if (v & m) != 0u32 {
-                    enabled = false;
-                    break;
-                }
-            }
-            output_vector.set(bit_nr, enabled);
+            output_vector.set(bit_nr, vector.is_disjoint(&self.exclusion_matrix[bit_nr]));
         }
         output_vector
     }
@@ -316,6 +309,19 @@ impl BitArrayRepresentation {
     /// 1. available sites are checked with tripoint and midpoint mask.
     ///     - if tripoints or midpoints are available, singlet possibilities are
     ///       masked out before the results vector is returned.
+    /// 
+    /// There are 5 output scenarios:
+    /// # Outputs
+    ///  - possibilties is empty                       -> `Ok(empty vector)`
+    ///  - tri/mid `masked_possibilities` is empty
+    ///      - available singlets <= `self.max_singlets` -> `Ok(vector)`
+    ///  - tri/mid `masked_possibilities` is NOT empty   -> `Ok(masked_vector`)
+    /// 
+    /// # Errors
+    ///  - possibilities is empty after `rightmost_mask` -> `Err(())`
+    ///  - tri/mid `masked_possibilities` is empty
+    ///      - available singlets >  `self.max_singlets` -> `Err(())`
+    /// Vectors which return `Err(())` should be ignored.
     ///
     /// ## Example:
     /// ```
@@ -344,29 +350,50 @@ impl BitArrayRepresentation {
     /// );
     ///
     /// let tripoint_possible =
-    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b01000]);
+    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b00010]);
     /// let tripoint_possible_sites = bit_array_repr.get_possibilities(&tripoint_possible);
     /// let tripoint_possible_answer =
-    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]);
-    /// assert_eq!(tripoint_possible_sites, tripoint_possible_answer);
+    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b01100]);
+    /// assert_eq!(tripoint_possible_sites, Ok(tripoint_possible_answer));
     ///
     /// let tripoint_impossible =
     ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b01001]);
     /// let tripoint_impossible_sites = bit_array_repr.get_possibilities(&tripoint_impossible);
     /// let tripoint_impossible_answer =
     ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b10000]);
-    /// assert_eq!(tripoint_impossible_sites, tripoint_impossible_answer);
+    /// assert_eq!(tripoint_impossible_sites, Ok(tripoint_impossible_answer));
     /// ```
-    #[must_use]
-    pub fn get_possibilities(&self, vector: &FixedBitSet) -> FixedBitSet {
+    pub fn get_possibilities(&self, vector: &FixedBitSet) -> Result<FixedBitSet, ()> {
         let non_singlet_mask: FixedBitSet = &self.tripoint_mask | &self.midpoint_mask;
-        let possibilities: FixedBitSet = self.matrix_vector_multiply(vector);
-        let masked_possibilities = &possibilities & &non_singlet_mask;
+        let rightmost_bit = vector.maximum();
 
+        // If no possibilities found here, vector is solution
+        let mut possibilities: FixedBitSet = self.matrix_vector_multiply(vector);
+
+        // possible_sites can be reused later
+        let possible_sites = possibilities.count_ones(..);
+        if possible_sites == 0 {
+            return Ok(possibilities);
+        };
+
+        // Mask of bits covered in other threads. If a vector is empty after this, all 
+        // possible following states of this vector will be covered by other threads.
+        if let Some(mask) = rightmost_bit {
+            possibilities.set_range(..mask, false);
+        };
+        if possibilities.is_clear() {
+            return  Err(());
+        };
+
+        let masked_possibilities = &possibilities & &non_singlet_mask;
         if masked_possibilities.is_clear() {
-            &possibilities & &self.singlet_mask
+            if possible_sites <= self.options.max_singlets {
+                Ok(possibilities)
+            } else {
+                Err(())
+            }
         } else {
-            masked_possibilities
+            Ok(masked_possibilities)
         }
     }
 
@@ -416,6 +443,7 @@ impl BitArrayRepresentation {
             midpoint_mask,
             singlet_mask,
             filter: Some(filter_set),
+            options: self.options,
         }
     }
 
@@ -426,8 +454,8 @@ impl BitArrayRepresentation {
     pub fn solve(&self, find_all: bool) -> Vec<BitArraySolution> {
         let test_lattice = self.filled_sites.clone();
 
-        let mut current_generation = HashSet::from([test_lattice]);
-        let mut next_generation = HashSet::new();
+        let mut current_generation = vec![test_lattice];
+        let mut next_generation = vec![];
         let mut depth = 0;
         let mut solutions = vec![];
         kdam::term::init(stderr().is_terminal());
@@ -442,7 +470,7 @@ impl BitArrayRepresentation {
                 desc = format!("Current depth: {depth}"),
                 mininterval = 1.0/60.0,
                 bar_format = "{desc suffix=' '}|{animation}| {spinner} {count}/{total} [{percentage:.0}%] in {elapsed human=true} ({rate:.1}/s, eta: {remaining human=true})",
-                colour = Colour::gradient(&["#5A56E0", "#EE6FF8"]),
+                colour = Colour::gradient(&["#FF0000", "#FFDD00"]),
                 spinner = Spinner::new(
                     &["▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█", "▇█▇", "█▇▆", "▇▆▅", "▆▅▄", "▅▄▃", "▄▃▂", "▃▂▁", "▂▁▂"],
                     60.0,
@@ -450,18 +478,18 @@ impl BitArrayRepresentation {
                 )
             );
             for candidate in iterator {
-                let possibilities = self.get_possibilities(candidate);
+                if let Ok(possibilities) = self.get_possibilities(candidate) {
+                    if possibilities.is_clear() {
+                        solutions.push(BitArraySolution(candidate.clone()));
+                        continue;
+                    }
 
-                if possibilities.is_clear() {
-                    solutions.push(BitArraySolution(candidate.clone()));
-                    continue;
-                }
+                    for fillable_site in possibilities.ones() {
+                        let mut new_candidate = candidate.clone();
+                        new_candidate.set(fillable_site, true);
 
-                for fillable_site in possibilities.ones() {
-                    let mut new_candidate = candidate.clone();
-                    new_candidate.set(fillable_site, true);
-
-                    next_generation.insert(new_candidate);
+                        next_generation.push(new_candidate);
+                    }
                 }
             }
 
@@ -557,7 +585,7 @@ impl Lattice {
     }
 
     /// Turns the lattice problem in an abstracted form based on bitarrays.
-    fn generate_intermediary(&self) -> BitArrayRepresentation {
+    fn generate_intermediary(&self, options: BitArraySettings) -> BitArrayRepresentation {
         let filled_sites = FixedBitSet::with_capacity(self.oxygens.len());
         let mut exclusion_matrix: Vec<FixedBitSet> = vec![];
 
@@ -585,6 +613,7 @@ impl Lattice {
             midpoint_mask,
             singlet_mask,
             filter: None,
+            options
         }
     }
 
@@ -995,8 +1024,11 @@ impl Lattice {
     /// Generates a more efficient representation of the lattice
     /// problem for the given lattice.
     #[must_use]
-    pub fn get_intermediary(&self) -> BitArrayRepresentation {
-        self.generate_intermediary()
+    pub fn get_intermediary(&self, max_singlets: usize) -> BitArrayRepresentation {
+        let options = BitArraySettings {
+            max_singlets
+        };
+        self.generate_intermediary(options)
     }
 
     /// Returns a solved version of the lattice. Usefull for plotting
