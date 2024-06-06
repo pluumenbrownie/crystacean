@@ -40,5 +40,5 @@ fn main() {
     let lattice = Lattice::python_new(lattice_points, 1.1, true);
     let bit_lattice = lattice.get_intermediary(2);
 
-    let _ = bit_lattice.solve(true);
+    let _ = bit_lattice.solve(true, false);
 }

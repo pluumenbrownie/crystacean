@@ -15,12 +15,21 @@
 use fixedbitset::FixedBitSet;
 use itertools::{izip, Itertools};
 use json::{object, JsonValue};
-use kdam::{tqdm, Colour, Spinner};
+use kdam::{par_tqdm, tqdm, Colour, Spinner};
+use scc::Bag;
 use std::{
-    collections::HashSet, f32::consts::PI, ffi::OsString, fs::File, io::{stderr, IsTerminal}, iter::zip, mem, sync::{Arc, RwLock}
+    collections::HashSet,
+    f32::consts::PI,
+    ffi::OsString,
+    fs::File,
+    io::{stderr, IsTerminal},
+    iter::zip,
+    mem,
+    sync::{Arc, RwLock},
 };
 
 use kiddo::{KdTree, SquaredEuclidean};
+use rayon::prelude::*;
 use std::io::prelude::*;
 
 // const TRIPLE_CROWN: [f32; 9] = [
@@ -162,7 +171,7 @@ struct Midpoint([LatticeIndex; 2]);
 #[derive(Clone, Copy)]
 struct Tripoint([LatticeIndex; 3]);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Default)]
 pub struct BitArraySolution(pub FixedBitSet);
 
 impl BitArraySolution {
@@ -230,7 +239,7 @@ impl BitArrayRepresentation {
         midpoint_mask: FixedBitSet,
         singlet_mask: FixedBitSet,
         filter: Option<FixedBitSet>,
-        options: BitArraySettings
+        options: BitArraySettings,
     ) -> Self {
         Self {
             filled_sites,
@@ -239,7 +248,7 @@ impl BitArrayRepresentation {
             midpoint_mask,
             singlet_mask,
             filter,
-            options
+            options,
         }
     }
 
@@ -309,14 +318,14 @@ impl BitArrayRepresentation {
     /// 1. available sites are checked with tripoint and midpoint mask.
     ///     - if tripoints or midpoints are available, singlet possibilities are
     ///       masked out before the results vector is returned.
-    /// 
+    ///
     /// There are 5 output scenarios:
     /// # Outputs
     ///  - possibilties is empty                       -> `Ok(empty vector)`
     ///  - tri/mid `masked_possibilities` is empty
     ///      - available singlets <= `self.max_singlets` -> `Ok(vector)`
     ///  - tri/mid `masked_possibilities` is NOT empty   -> `Ok(masked_vector`)
-    /// 
+    ///
     /// # Errors
     ///  - possibilities is empty after `rightmost_mask` -> `Err(())`
     ///  - tri/mid `masked_possibilities` is empty
@@ -376,13 +385,13 @@ impl BitArrayRepresentation {
             return Ok(possibilities);
         };
 
-        // Mask of bits covered in other threads. If a vector is empty after this, all 
+        // Mask of bits covered in other threads. If a vector is empty after this, all
         // possible following states of this vector will be covered by other threads.
         if let Some(mask) = rightmost_bit {
             possibilities.set_range(..mask, false);
         };
         if possibilities.is_clear() {
-            return  Err(());
+            return Err(());
         };
 
         let masked_possibilities = &possibilities & &non_singlet_mask;
@@ -451,7 +460,7 @@ impl BitArrayRepresentation {
     ///
     /// `find_all` can be set to `true` to find all
     #[must_use]
-    pub fn solve(&self, find_all: bool) -> Vec<BitArraySolution> {
+    pub fn solve(&self, find_all: bool, silent: bool) -> Vec<BitArraySolution> {
         let test_lattice = self.filled_sites.clone();
 
         let mut current_generation = vec![test_lattice];
@@ -465,7 +474,15 @@ impl BitArrayRepresentation {
 
             next_generation.clear();
 
-            let iterator = tqdm!(
+            let iterator = if silent {
+                tqdm!(
+                    current_generation.iter(),
+                    disable = true,
+                    position = 1,
+                    bar_format = ""
+                )
+            } else {
+                tqdm!(
                 current_generation.iter(),
                 desc = format!("Current depth: {depth}"),
                 mininterval = 1.0/60.0,
@@ -475,8 +492,11 @@ impl BitArrayRepresentation {
                     &["▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█", "▇█▇", "█▇▆", "▇▆▅", "▆▅▄", "▅▄▃", "▄▃▂", "▃▂▁", "▂▁▂"],
                     60.0,
                     1.0,
-                )
-            );
+                ),
+                leave = true,
+                position = 1
+            )
+            };
             for candidate in iterator {
                 if let Ok(possibilities) = self.get_possibilities(candidate) {
                     if possibilities.is_clear() {
@@ -503,6 +523,81 @@ impl BitArrayRepresentation {
         solutions
     }
 
+    /// Starts the solving process.
+    ///
+    /// `find_all` can be set to `true` to find all
+    #[must_use]
+    pub fn solve_parallel(&self, find_all: bool, silent: bool) -> Vec<BitArraySolution> {
+        let test_lattice = self.filled_sites.clone();
+
+        let mut current_generation = vec![test_lattice];
+        let mut next_generation = vec![];
+        let mut depth = 0;
+        // let mut solutions = Mutex::new(vec![]);
+        let solution_bag: Bag<BitArraySolution> = Bag::default();
+        kdam::term::init(stderr().is_terminal());
+
+        while solution_bag.is_empty() | (find_all & (!next_generation.is_empty())) {
+            depth += 1;
+
+            next_generation.clear();
+
+            let iterator = if silent {
+                par_tqdm!(
+                    current_generation.par_iter(),
+                    disable = true,
+                    position = 1,
+                    bar_format = ""
+                )
+            } else { 
+                par_tqdm!(
+                    current_generation.par_iter(),
+                    desc = format!("Current depth: {depth}"),
+                    mininterval = 1.0/60.0,
+                    bar_format = "{desc suffix=' '}|{animation}| {spinner} {count}/{total} [{percentage:.0}%] in {elapsed human=true} ({rate:.1}/s, eta: {remaining human=true})",
+                    colour = Colour::gradient(&["#0000FF", "#00FFFF"]),
+                    spinner = Spinner::new(
+                        &["▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█", "▇█▇", "█▇▆", "▇▆▅", "▆▅▄", "▅▄▃", "▄▃▂", "▃▂▁", "▂▁▂"],
+                        60.0,
+                        1.0,
+                    ),
+                    leave = true,
+                    position = 1
+                )
+            };
+
+            next_generation = iterator
+                .map(|vector| (vector, self.get_possibilities(vector)))
+                .filter_map(|(v, c)| c.map_or_else(|_| None, |p| Some((v, p))))
+                .map(|(v, c)| {
+                    let mut new_candidates = vec![];
+                    for fillable_site in c.ones() {
+                        let mut new = v.clone();
+                        new.set(fillable_site, true);
+                        new_candidates.push(new);
+                    }
+                    (v, new_candidates)
+                })
+                .flat_map_iter(|(v, c)| {
+                    if c.is_empty() {
+                        solution_bag.push(BitArraySolution(v.clone()));
+                    }
+                    c
+                })
+                .collect();
+
+            mem::swap(&mut current_generation, &mut next_generation);
+        }
+        let mut solutions = vec![];
+        for mut solution in solution_bag {
+            if let Some(filter) = &self.filter {
+                solution.inflate(filter);
+            }
+            solutions.push(solution);
+        }
+        solutions
+    }
+
     #[must_use]
     pub fn __str__(&self) -> String {
         let mut output = String::from("BitArrayRepresentation: {\n");
@@ -516,7 +611,8 @@ impl BitArrayRepresentation {
         output += format!("  midpoint_mask = \n    {}\n", self.midpoint_mask).as_str();
         output += format!("  singlet_mask = \n    {}\n", self.singlet_mask).as_str();
         output += "  filter = \n    ";
-        output += self.filter
+        output += self
+            .filter
             .as_ref()
             .map_or_else(|| "None".into(), |fbs| format!("{fbs}"))
             .as_str();
@@ -613,7 +709,7 @@ impl Lattice {
             midpoint_mask,
             singlet_mask,
             filter: None,
-            options
+            options,
         }
     }
 
@@ -1025,9 +1121,7 @@ impl Lattice {
     /// problem for the given lattice.
     #[must_use]
     pub fn get_intermediary(&self, max_singlets: usize) -> BitArrayRepresentation {
-        let options = BitArraySettings {
-            max_singlets
-        };
+        let options = BitArraySettings { max_singlets };
         self.generate_intermediary(options)
     }
 
