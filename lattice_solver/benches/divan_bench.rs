@@ -11,7 +11,7 @@ fn full_run(silent: bool) -> Vec<lattice_solver::BitArraySolution> {
     let bit_lattice = lattice.get_intermediary(2);
 
     let result = bit_lattice.solve(true, silent);
-    print!("\r{}{}" ,clear::AfterCursor, cursor::Right(22));
+    print!("\r{}{}", cursor::Right(22), clear::AfterCursor);
     result
 }
 
@@ -23,7 +23,7 @@ fn full_run_parallel(silent: bool) -> Vec<lattice_solver::BitArraySolution> {
     let bit_lattice = lattice.get_intermediary(2);
 
     let result = bit_lattice.solve_parallel(true, silent);
-    print!("\r{}{}" ,clear::AfterCursor, cursor::Right(22));
+    print!("\r{}{}", cursor::Right(22), clear::AfterCursor);
     result
 }
 
