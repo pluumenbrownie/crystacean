@@ -1,3 +1,4 @@
+maturin
 typer
 scipy
 matplotlib
