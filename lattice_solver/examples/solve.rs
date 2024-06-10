@@ -1,5 +1,5 @@
 #![allow(clippy::excessive_precision)]
-use lattice_solver::Lattice;
+use lattice_solver::{BitArraySettings, Lattice};
 
 
 fn main() {
@@ -38,7 +38,9 @@ fn main() {
         (vec![3.75, 3.897114317029974], vec![]),
     ];
     let lattice = Lattice::python_new(lattice_points, 1.1, true);
-    let bit_lattice = lattice.get_intermediary(2);
+    let options = BitArraySettings::create(2, 0.1, 1.0, 1.0);
+    let bit_lattice = lattice.get_intermediary(options);
+    // bit_lattice.print_distances();
 
     let _ = bit_lattice.solve(true, false);
 }

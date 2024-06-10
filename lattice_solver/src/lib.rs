@@ -18,7 +18,7 @@ use json::{object, JsonValue};
 use kdam::{par_tqdm, tqdm, Colour, Spinner};
 use scc::Bag;
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     f32::consts::PI,
     ffi::OsString,
     fs::File,
@@ -143,6 +143,14 @@ impl Oxygen {
             exclusions: vec![],
         }
     }
+
+    fn distance_to(&self, other: &Self, max_x: f32, max_y: f32) -> f32 {
+        (
+            (self.x - other.x).powi(2) + 
+            (self.y - other.y).powi(2) + 
+            (self.z - other.z).powi(2)
+        ).sqrt()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -216,6 +224,7 @@ impl BitArraySolution {
 pub struct BitArrayRepresentation {
     filled_sites: FixedBitSet,
     exclusion_matrix: Vec<FixedBitSet>,
+    distances_matrix: Vec<Vec<f32>>,
     tripoint_mask: FixedBitSet,
     midpoint_mask: FixedBitSet,
     singlet_mask: FixedBitSet,
@@ -226,6 +235,9 @@ pub struct BitArrayRepresentation {
 #[derive(Debug, Clone, Copy)]
 pub struct BitArraySettings {
     pub max_singlets: usize,
+    pub difference_distance: f32,
+    pub max_x: f32,
+    pub max_y: f32,
 }
 
 impl BitArrayRepresentation {
@@ -235,6 +247,7 @@ impl BitArrayRepresentation {
     pub fn create_debug(
         filled_sites: FixedBitSet,
         exclusion_matrix: Vec<FixedBitSet>,
+        distances_matrix: Vec<Vec<f32>>,
         tripoint_mask: FixedBitSet,
         midpoint_mask: FixedBitSet,
         singlet_mask: FixedBitSet,
@@ -244,6 +257,7 @@ impl BitArrayRepresentation {
         Self {
             filled_sites,
             exclusion_matrix,
+            distances_matrix,
             tripoint_mask,
             midpoint_mask,
             singlet_mask,
@@ -429,6 +443,7 @@ impl BitArrayRepresentation {
         let mut singlet_mask = FixedBitSet::with_capacity(new_length);
 
         let mut exclusion_matrix = vec![];
+        let mut distances_matrix = vec![];
 
         for (new_number, old_number) in filter_set.ones().enumerate() {
             tripoint_mask.set(new_number, self.tripoint_mask[old_number]);
@@ -436,18 +451,23 @@ impl BitArrayRepresentation {
             singlet_mask.set(new_number, self.singlet_mask[old_number]);
 
             let mut new_matrix_row = FixedBitSet::with_capacity(new_length);
+            let mut new_distances_row = vec![];
             for (col_number, old_col_number) in filter_set.ones().enumerate() {
                 new_matrix_row.set(
                     col_number,
                     self.exclusion_matrix[old_number][old_col_number],
                 );
+
+                new_distances_row.push(self.distances_matrix[old_number][old_col_number]);
             }
             exclusion_matrix.push(new_matrix_row);
+            distances_matrix.push(new_distances_row);
         }
 
         Self {
             filled_sites,
             exclusion_matrix,
+            distances_matrix,
             tripoint_mask,
             midpoint_mask,
             singlet_mask,
@@ -483,20 +503,23 @@ impl BitArrayRepresentation {
                 )
             } else {
                 tqdm!(
-                current_generation.iter(),
-                desc = format!("Current depth: {depth}"),
-                mininterval = 1.0/60.0,
-                bar_format = "{desc suffix=' '}|{animation}| {spinner} {count}/{total} [{percentage:.0}%] in {elapsed human=true} ({rate:.1}/s, eta: {remaining human=true})",
-                colour = Colour::gradient(&["#FF0000", "#FFDD00"]),
-                spinner = Spinner::new(
-                    &["▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█", "▇█▇", "█▇▆", "▇▆▅", "▆▅▄", "▅▄▃", "▄▃▂", "▃▂▁", "▂▁▂"],
-                    60.0,
-                    1.0,
-                ),
-                leave = true,
-                position = 1
-            )
+                    current_generation.iter(),
+                    desc = format!("Current depth: {depth}"),
+                    mininterval = 1.0/60.0,
+                    bar_format = "{desc suffix=' '}|{animation}| {spinner} {count}/{total} [{percentage:.0}%] in {elapsed human=true} ({rate:.1}/s, eta: {remaining human=true})",
+                    colour = Colour::gradient(&["#FF0000", "#FFDD00"]),
+                    spinner = Spinner::new(
+                        &["▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█", "▇█▇", "█▇▆", "▇▆▅", "▆▅▄", "▅▄▃", "▄▃▂", "▃▂▁", "▂▁▂"],
+                        60.0,
+                        1.0,
+                    ),
+                    leave = true,
+                    position = 1
+                )
             };
+
+            let mut structure_map = HashMap::new();
+
             for candidate in iterator {
                 if let Ok(possibilities) = self.get_possibilities(candidate) {
                     if possibilities.is_clear() {
@@ -508,7 +531,36 @@ impl BitArrayRepresentation {
                         let mut new_candidate = candidate.clone();
                         new_candidate.set(fillable_site, true);
 
-                        next_generation.push(new_candidate);
+                        let type_distribution = (
+                            new_candidate.union_count(&self.tripoint_mask),
+                            new_candidate.union_count(&self.midpoint_mask),
+                            new_candidate.union_count(&self.singlet_mask),
+                        );
+
+                        if !structure_map.contains_key(&type_distribution) {
+                            structure_map.insert(type_distribution, vec![]);
+                        };
+                        let structure_vec: &Vec<Vec<f32>> =
+                            structure_map.get(&type_distribution).unwrap();
+
+                        let mut new_structure = vec![];
+                        for (one, two) in new_candidate.ones().combinations(2).map(|v| (v[0], v[1]))
+                        {
+                            new_structure.push(self.distances_matrix[one][two]);
+                        }
+                        let unique = structure_vec.iter().all(|structure| {
+                            new_structure
+                                .iter()
+                                .zip(structure.iter())
+                                .any(|(one, two)| {
+                                    (one - two).abs() > self.options.difference_distance
+                                })
+                        });
+                        if unique {
+                            let structure_vec = structure_map.get_mut(&type_distribution).unwrap();
+                            structure_vec.push(new_structure);
+                            next_generation.push(new_candidate);
+                        }
                     }
                 }
             }
@@ -549,7 +601,7 @@ impl BitArrayRepresentation {
                     position = 1,
                     bar_format = ""
                 )
-            } else { 
+            } else {
                 par_tqdm!(
                     current_generation.par_iter(),
                     desc = format!("Current depth: {depth}"),
@@ -566,9 +618,12 @@ impl BitArrayRepresentation {
                 )
             };
 
+            let structure_archive: scc::HashMap<(usize, usize, usize), Vec<Vec<f32>>> =
+                scc::HashMap::new();
+
             next_generation = iterator
                 .map(|vector| (vector, self.get_possibilities(vector)))
-                .filter_map(|(v, c)| c.map_or_else(|_| None, |p| Some((v, p))))
+                .filter_map(|(v, c)| c.map_or_else(|()| None, |p| Some((v, p))))
                 .map(|(v, c)| {
                     let mut new_candidates = vec![];
                     for fillable_site in c.ones() {
@@ -584,6 +639,50 @@ impl BitArrayRepresentation {
                     }
                     c
                 })
+                .filter(|c| {
+                    let type_distribution = (
+                        c.union_count(&self.tripoint_mask),
+                        c.union_count(&self.midpoint_mask),
+                        c.union_count(&self.singlet_mask),
+                    );
+                    let mut distances_array = vec![];
+                    let ones = c.ones().collect_vec();
+                    for (one, two) in ones.into_iter().tuple_combinations() {
+                        let distance = self.distances_matrix[one][two];
+                        if distance > 0.0 {
+                            distances_array.push(distance);
+                        };
+                    }
+                    distances_array.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+
+                    if !structure_archive.contains(&type_distribution) {
+                        structure_archive.insert(type_distribution, vec![]).unwrap();
+                    }
+
+                    let structures = structure_archive.get(&type_distribution).unwrap();
+                    let mut unique = true;
+
+                    'outer: for structure in structures.get() {
+                        for point in 0..structure.len() {
+                            if (distances_array[point] - structure[point]).abs()
+                                > self.options.difference_distance
+                            {
+                                continue 'outer;
+                            }
+                        }
+                        unique = false;
+                        break;
+                    }
+
+                    if unique {
+                        structure_archive
+                            .get(&type_distribution)
+                            .unwrap()
+                            .get_mut()
+                            .push(distances_array);
+                    }
+                    unique
+                })
                 .collect();
 
             mem::swap(&mut current_generation, &mut next_generation);
@@ -596,6 +695,12 @@ impl BitArrayRepresentation {
             solutions.push(solution);
         }
         solutions
+    }
+
+    pub fn print_distances(&self) {
+        for row in &self.distances_matrix {
+            println!("{row:?}");
+        }
     }
 
     #[must_use]
@@ -624,6 +729,17 @@ impl BitArrayRepresentation {
     #[must_use]
     pub fn __repr__(&self) -> String {
         format!("BitArrayRepresentation[{}]", self.filled_sites)
+    }
+}
+
+impl BitArraySettings {
+    pub const fn create(max_singlets: usize, difference_distance: f32, max_x: f32, max_y: f32) -> Self {
+        Self {
+            max_singlets,
+            difference_distance,
+            max_x,
+            max_y,
+        }
     }
 }
 
@@ -684,6 +800,7 @@ impl Lattice {
     fn generate_intermediary(&self, options: BitArraySettings) -> BitArrayRepresentation {
         let filled_sites = FixedBitSet::with_capacity(self.oxygens.len());
         let mut exclusion_matrix: Vec<FixedBitSet> = vec![];
+        let mut distances_matrix = vec![];
 
         let mut tripoint_mask = FixedBitSet::with_capacity(self.oxygens.len());
         let mut midpoint_mask = FixedBitSet::with_capacity(self.oxygens.len());
@@ -694,6 +811,19 @@ impl Lattice {
             for exclusion in &oxygen.exclusions {
                 exclusions.set(exclusion.0, true);
             }
+
+            let mut distances_row = vec![];
+            for other in 0..self.oxygens.len() {
+                distances_row.push(if other > number {
+                    let one = &self.oxygens[number];
+                    let two = &self.oxygens[other];
+                    one.distance_to(two)
+                } else {
+                    0.0
+                });
+            }
+            distances_matrix.push(distances_row);
+
             match &oxygen.sitetype {
                 SiteType::Tripoint(_) => tripoint_mask.set(number, true),
                 SiteType::Midpoint(_) => midpoint_mask.set(number, true),
@@ -705,12 +835,21 @@ impl Lattice {
         BitArrayRepresentation {
             filled_sites,
             exclusion_matrix,
+            distances_matrix,
             tripoint_mask,
             midpoint_mask,
             singlet_mask,
             filter: None,
             options,
         }
+    }
+
+    pub fn find_max(&self) -> (f32, f32) {
+        let (max_x, max_y) = (0, 0);
+
+        
+        
+        (max_x, max_y)
     }
 
     /// `distance_margin` should be 1.1 for 2D, 1.4 for 3D
@@ -1120,8 +1259,10 @@ impl Lattice {
     /// Generates a more efficient representation of the lattice
     /// problem for the given lattice.
     #[must_use]
-    pub fn get_intermediary(&self, max_singlets: usize) -> BitArrayRepresentation {
-        let options = BitArraySettings { max_singlets };
+    pub fn get_intermediary(
+        &self,
+        options: BitArraySettings
+    ) -> BitArrayRepresentation {
         self.generate_intermediary(options)
     }
 
