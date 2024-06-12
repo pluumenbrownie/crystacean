@@ -115,7 +115,7 @@ impl LatticePoint {
     fn get_connections(&self) -> &RwLock<Vec<OxygenIndex>> {
         self.ghost_to
             .as_ref()
-            .map_or(&self.connected_to, |_| &self.connected_to)
+            .map_or(&self.connected_to, |point| &point.connected_to)
     }
 
     #[allow(clippy::suboptimal_flops)]

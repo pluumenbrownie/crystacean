@@ -68,6 +68,7 @@ fn main() {
 
     let options = BitArraySettings::create(2, 0.2, lattice.find_max());
     let bit_lattice = lattice.get_intermediary(options);
+
     // bit_lattice.print_distances();
     println!("{}", bit_lattice.__str__());
     println!("{}", bit_lattice.exclusion_matrix[0][0]);
