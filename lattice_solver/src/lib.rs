@@ -143,14 +143,6 @@ impl Oxygen {
             exclusions: vec![],
         }
     }
-
-    fn distance_to(&self, other: &Self, max_x: f32, max_y: f32) -> f32 {
-        (
-            (self.x - other.x).powi(2) + 
-            (self.y - other.y).powi(2) + 
-            (self.z - other.z).powi(2)
-        ).sqrt()
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -222,14 +214,14 @@ impl BitArraySolution {
 }
 
 pub struct BitArrayRepresentation {
-    filled_sites: FixedBitSet,
-    exclusion_matrix: Vec<FixedBitSet>,
-    distances_matrix: Vec<Vec<f32>>,
-    tripoint_mask: FixedBitSet,
-    midpoint_mask: FixedBitSet,
-    singlet_mask: FixedBitSet,
-    filter: Option<FixedBitSet>,
-    options: BitArraySettings,
+    pub filled_sites: FixedBitSet,
+    pub exclusion_matrix: Vec<FixedBitSet>,
+    pub distances_matrix: Vec<Vec<f32>>,
+    pub tripoint_mask: FixedBitSet,
+    pub midpoint_mask: FixedBitSet,
+    pub singlet_mask: FixedBitSet,
+    pub filter: Option<FixedBitSet>,
+    pub options: BitArraySettings,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -489,6 +481,84 @@ impl BitArrayRepresentation {
         let mut solutions = vec![];
         kdam::term::init(stderr().is_terminal());
 
+        let mut total_candidates = 0;
+        let mut total_uniques = 0;
+
+        while solutions.is_empty() | (find_all & (!next_generation.is_empty())) {
+            depth += 1;
+
+            next_generation.clear();
+
+            let iterator = if silent {
+                tqdm!(
+                    current_generation.iter(),
+                    disable = true,
+                    position = 1,
+                    bar_format = ""
+                )
+            } else {
+                tqdm!(
+                    current_generation.iter(),
+                    desc = format!("Current depth: {depth}"),
+                    mininterval = 1.0/60.0,
+                    bar_format = "{desc suffix=' '}|{animation}| {spinner} {count}/{total} [{percentage:.0}%] in {elapsed human=true} ({rate:.1}/s, eta: {remaining human=true})",
+                    colour = Colour::gradient(&["#FF0000", "#FFDD00"]),
+                    spinner = Spinner::new(
+                        &["▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█", "▇█▇", "█▇▆", "▇▆▅", "▆▅▄", "▅▄▃", "▄▃▂", "▃▂▁", "▂▁▂"],
+                        60.0,
+                        1.0,
+                    ),
+                    leave = true,
+                    position = 1
+                )
+            };
+
+            for candidate in iterator {
+                if let Ok(possibilities) = self.get_possibilities(candidate) {
+                    if possibilities.is_clear() {
+                        solutions.push(BitArraySolution(candidate.clone()));
+                        continue;
+                    }
+
+                    for fillable_site in possibilities.ones() {
+                        total_candidates += 1;
+                        let mut new_candidate = candidate.clone();
+                        new_candidate.set(fillable_site, true);
+                        
+                        next_generation.push(new_candidate);
+                        
+                    }
+                }
+            }
+
+            mem::swap(&mut current_generation, &mut next_generation);
+        }
+        if let Some(filter) = &self.filter {
+            for solution in &mut solutions {
+                solution.inflate(filter);
+            }
+        }
+        println!();
+        println!("Total states: {total_candidates}");
+        solutions
+    }
+    
+    /// Starts the solving process.
+    ///
+    /// `find_all` can be set to `true` to find all
+    #[must_use]
+    pub fn solve_filtered(&self, find_all: bool, silent: bool) -> Vec<BitArraySolution> {
+        let test_lattice = self.filled_sites.clone();
+
+        let mut current_generation = vec![test_lattice];
+        let mut next_generation = vec![];
+        let mut depth = 0;
+        let mut solutions = vec![];
+        kdam::term::init(stderr().is_terminal());
+
+        let mut total_candidates = 0;
+        let mut total_uniques = 0;
+
         while solutions.is_empty() | (find_all & (!next_generation.is_empty())) {
             depth += 1;
 
@@ -528,6 +598,7 @@ impl BitArrayRepresentation {
                     }
 
                     for fillable_site in possibilities.ones() {
+                        total_candidates += 1;
                         let mut new_candidate = candidate.clone();
                         new_candidate.set(fillable_site, true);
 
@@ -537,11 +608,9 @@ impl BitArrayRepresentation {
                             new_candidate.union_count(&self.singlet_mask),
                         );
 
-                        if !structure_map.contains_key(&type_distribution) {
-                            structure_map.insert(type_distribution, vec![]);
-                        };
-                        let structure_vec: &Vec<Vec<f32>> =
-                            structure_map.get(&type_distribution).unwrap();
+                        let structure_vec: &Vec<Vec<f32>> = structure_map
+                            .entry(type_distribution)
+                            .or_insert_with(Vec::new);
 
                         let mut new_structure = vec![];
                         for (one, two) in new_candidate.ones().combinations(2).map(|v| (v[0], v[1]))
@@ -557,6 +626,7 @@ impl BitArrayRepresentation {
                                 })
                         });
                         if unique {
+                            total_uniques += 1;
                             let structure_vec = structure_map.get_mut(&type_distribution).unwrap();
                             structure_vec.push(new_structure);
                             next_generation.push(new_candidate);
@@ -572,6 +642,9 @@ impl BitArrayRepresentation {
                 solution.inflate(filter);
             }
         }
+        println!();
+        println!("Total states: {total_candidates}");
+        println!("Total unique: {total_uniques}");
         solutions
     }
 
@@ -733,12 +806,12 @@ impl BitArrayRepresentation {
 }
 
 impl BitArraySettings {
-    pub const fn create(max_singlets: usize, difference_distance: f32, max_x: f32, max_y: f32) -> Self {
+    pub const fn create(max_singlets: usize, difference_distance: f32, max: (f32, f32)) -> Self {
         Self {
             max_singlets,
             difference_distance,
-            max_x,
-            max_y,
+            max_x: max.0,
+            max_y: max.1,
         }
     }
 }
@@ -815,9 +888,7 @@ impl Lattice {
             let mut distances_row = vec![];
             for other in 0..self.oxygens.len() {
                 distances_row.push(if other > number {
-                    let one = &self.oxygens[number];
-                    let two = &self.oxygens[other];
-                    one.distance_to(two)
+                    self.distance_between(OxygenIndex(number), OxygenIndex(other))
                 } else {
                     0.0
                 });
@@ -845,11 +916,43 @@ impl Lattice {
     }
 
     pub fn find_max(&self) -> (f32, f32) {
-        let (max_x, max_y) = (0, 0);
+        let (mut max_x, mut max_y) = (0.0, 0.0);
 
-        
+        for point in &self.points {
+            if point.x > max_x && point.y == 0.0 {
+                max_x = point.x;
+            }
+            if point.y > max_y {
+                max_y = point.y;
+            }
+        }
         
         (max_x, max_y)
+    }
+
+    pub fn distance_between(&self, index_one: OxygenIndex, index_two: OxygenIndex) -> f32 {
+        let (max_x, max_y) = self.find_max();
+        let one = &self.oxygens[index_one.0];
+        let two = &self.oxygens[index_two.0];
+
+        let delta_x = {
+            let dx = (one.x - two.x).abs();
+            if dx > max_x/2.0 {
+                dx - max_x
+            } else {
+                dx
+            }
+        };
+        let delta_y = {
+            let dy = (one.y - two.y).abs();
+            if dy > max_y/2.0 {
+                dy - max_y
+            } else {
+                dy
+            }
+        };
+
+        (delta_x.powi(2) + delta_y.powi(2) + (one.z - two.z).powi(2)).sqrt()
     }
 
     /// `distance_margin` should be 1.1 for 2D, 1.4 for 3D
