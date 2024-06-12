@@ -80,7 +80,7 @@ def from_size(
     """
     Create SiO2 interface structures for a SiC unit cell with 4*size attachment points.
     """
-    if not (plot and save_to):
+    if not (plot or save_to):
         print("NOTE: both plot and save_to are false!")
     if save_to:
         os.mkdir(save_to)
@@ -337,7 +337,7 @@ def ase_json_handler(
     save_to: str,
     filtered: bool,
 ):
-    if not (plot and save_to):
+    if not (plot or save_to):
         print("NOTE: both plot and save_to are false!")
     lattice = from_dft_json(filepath, distance_margin, False)
 
