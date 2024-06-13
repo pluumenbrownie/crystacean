@@ -1,4 +1,4 @@
-from lattice_solver_python import Lattice, test_module, from_dft_json
+from crystacean import Lattice, test_module, from_dft_json
 from findthosepoints import full_lattice_from_basis_vectors
 import matplotlib.pyplot as plt
 from matplotlib import rcParams

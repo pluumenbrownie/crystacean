@@ -9,7 +9,7 @@ from ase.io import read as aseread
 
 from classes import from_file as from_file_classes
 from findthosepoints import full_lattice_from_basis_vectors
-from lattice_solver_python import Lattice, from_dft_json
+from crystacean import Lattice, from_dft_json
 from cull_results import cull
 
 # Test libraries required for other files.
