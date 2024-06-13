@@ -9,5 +9,5 @@ name = "lattice_solver_python"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = "0.19.0"
+pyo3 = "0.21.2"
 lattice_solver = { path = "../lattice_solver" }

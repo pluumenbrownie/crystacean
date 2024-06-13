@@ -1,11 +1,11 @@
+use ::lattice_solver::BitArraySettings;
 use pyo3::prelude::*;
 use std::ffi::OsString;
-use std::str::FromStr;
 
 use ::lattice_solver::BitArrayRepresentation as WrappedRepresentation;
 use ::lattice_solver::BitArraySolution as WrappedSolution;
 use ::lattice_solver::Lattice as WrappedLattice;
-use ::lattice_solver::SiteFilter as WrappedFilter;
+use ::lattice_solver::site_filter::SiteFilter as WrappedFilter;
 
 #[pyclass]
 struct BitArraySolution {
@@ -94,9 +94,15 @@ impl Lattice {
         self.wrapped.singlets_to_plot()
     }
 
-    fn get_intermediary(&self) -> BitArrayRepresentation {
+    #[pyo3(signature = (max_singlets=2, difference_distance=0.05, max=None))]
+    fn get_intermediary(&self, max_singlets: usize, difference_distance: f32, max: Option<(f32, f32)>) -> BitArrayRepresentation {
         BitArrayRepresentation {
-            wrapped: self.wrapped.get_intermediary(),
+            wrapped: self.wrapped.get_intermediary(BitArraySettings::create(
+                    max_singlets,
+                    difference_distance,
+                    max.unwrap_or(self.wrapped.find_max()),
+                )
+            ),
         }
     }
 
@@ -115,7 +121,7 @@ impl Lattice {
     }
 
     pub fn export(&self, path: OsString, name: String) {
-        self.wrapped.export(path, name);
+        self.wrapped.export(&path, name);
     }
 
     fn diagnostic_ase(&self) {
@@ -123,7 +129,7 @@ impl Lattice {
     }
 
     fn export_as_ase_json(&self, filename: String) {
-        self.wrapped.export_as_ase_json(filename)
+        self.wrapped.export_as_ase_json(&filename)
     }
 }
 
@@ -144,8 +150,8 @@ fn test_module() {
 
 /// A Python module implemented in Rust.
 #[pymodule]
-#[pyo3(name = "lattice_solver_python")]
-fn lattice_solver(_py: Python, m: &PyModule) -> PyResult<()> {
+#[pyo3(name = "crystacean")]
+fn lattice_solver(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(test_module, m)?)?;
     m.add_function(wrap_pyfunction!(from_dft_json, m)?)?;
     m.add_class::<Lattice>()?;
