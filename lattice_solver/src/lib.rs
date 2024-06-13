@@ -39,7 +39,7 @@ use inserters::*;
 mod crown;
 use crown::*;
 
-mod site_filter;
+pub mod site_filter;
 
 
 pub struct Lattice {

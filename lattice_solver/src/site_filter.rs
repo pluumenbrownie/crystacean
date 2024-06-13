@@ -2,7 +2,7 @@ use crate::*;
 
 #[derive(Clone, Debug)]
 pub struct SiteFilter {
-    pub(crate) wrapped: Vec<OxygenIndex>,
+    pub wrapped: Vec<OxygenIndex>,
 }
 
 impl SiteFilter {
