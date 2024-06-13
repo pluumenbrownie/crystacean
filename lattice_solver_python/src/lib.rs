@@ -40,7 +40,7 @@ struct BitArrayRepresentation {
 impl BitArrayRepresentation {
     fn solve(&self, find_all: bool) -> Vec<BitArraySolution> {
         self.wrapped
-            .solve(find_all)
+            .solve(find_all, false)
             .into_iter()
             .map(|a| BitArraySolution { wrapped: a })
             .collect()

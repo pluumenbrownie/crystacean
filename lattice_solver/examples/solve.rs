@@ -1,5 +1,4 @@
 #![allow(clippy::excessive_precision)]
-use std::{ffi::OsString, process::exit};
 
 use lattice_solver::{BitArraySettings, Lattice};
 
@@ -66,22 +65,19 @@ fn main() {
     ];
     let lattice = Lattice::python_new(lattice_points, 1.1, true);
 
-    let options = BitArraySettings::create(2, 0.2, lattice.find_max());
+    let options = BitArraySettings::create(2, 0.05, lattice.find_max());
     let bit_lattice = lattice.get_intermediary(options);
 
     // bit_lattice.print_distances();
     println!("{}", bit_lattice.__str__());
-    println!("{}", bit_lattice.exclusion_matrix[0][0]);
-    // println!("{}", bit_lattice.exclusion_matrix[7][5]);
-    exit(0);
 
-    let solutions = bit_lattice.solve(true, false);
+    let solutions = bit_lattice.solve_filtered(true, false);
     println!("Solutions found: {}", solutions.len());
 
     // let solutions_filtered = bit_lattice.solve_filtered(true, false);
     // println!("Solutions found: {}", solutions.len());
-    for (number, solution) in solutions.iter().enumerate() {
-        let solution_lattice = lattice.to_solved_lattice(solution);
-        solution_lattice.export(&OsString::from("../exports/test2"), format!("test2_{number}.json"));
-    }
+    // for (number, solution) in solutions.iter().enumerate() {
+    //     let solution_lattice = lattice.to_solved_lattice(solution);
+    //     solution_lattice.export(&OsString::from("../exports/test4"), format!("test2_{number}.json"));
+    // }
 }
