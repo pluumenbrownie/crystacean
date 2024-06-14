@@ -38,46 +38,16 @@ in
       ''-I${pkgs.glib.out}/lib/glib-2.0/include/''
     ];
 
-    packages = [
-    (pkgs.python312.withPackages (python-pkgs: [
+    packages = with pkgs; [
+    ((python312.withPackages (python-pkgs: [
       # select Python packages here
-      # python-pkgs.maturin
       python-pkgs.typer
       python-pkgs.scipy
       python-pkgs.matplotlib
       python-pkgs.tqdm
       python-pkgs.alive-progress
       python-pkgs.ase
-    ]))
-    pkgs.maturin
+    ])).override(args: { ignoreCollisions = true; })) # https://github.com/DavHau/mach-nix/issues/24
+    maturin
   ];
-  }
-# { pkgs ? import <nixpkgs> {}}:
-# let
-#   fhs = pkgs.buildFHSUserEnv {
-#     name = "crystacean";
-
-#     targetPkgs = _: [
-#       pkgs.micromamba
-#       pkgs.cargo
-#       pkgs.rustc
-#       pkgs.clippy 
-#       pkgs.cargo-flamegraph
-#       pkgs.rustfmt
-#       pkgs.gccgo
-#     ];
-
-#     profile = ''
-#       export RUST_SRC_PATH="${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}/lib/rustlib/src/rust/library/"
-#       set -e
-#       eval "$(micromamba shell hook --shell=posix)"
-#       export MAMBA_ROOT_PREFIX=${builtins.getEnv "PWD"}/.mamba
-#       if ! test -d $MAMBA_ROOT_PREFIX/envs/mamba-crystacean; then
-#           micromamba create --yes -q -n mamba-crystacean
-#       fi
-#       micromamba activate mamba-crystacean
-#       micromamba install --yes -f requirements.txt -c conda-forge
-#       set +e
-#     '';
-#   };
-# in fhs.env
+}
