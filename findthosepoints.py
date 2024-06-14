@@ -318,23 +318,23 @@ def full_lattice_from_basis_vectors(size: int = 1) -> list[tuple[list[float], li
 
         # note left/bottom boundaries
         if y == 0:
-            bottom_points[new_point_lb[0][0]] = new_point_lb
-            bottom_points[new_point_rb[0][0]] = new_point_rb
+            bottom_points[round(new_point_lb[0][0], 4)] = new_point_lb
+            bottom_points[round(new_point_rb[0][0], 4)] = new_point_rb
         if x == 0:
-            left_points[new_point_lb[0][1]] = new_point_lb
-            left_points[new_point_lt[0][1]] = new_point_lt
+            left_points[round(new_point_lb[0][1], 4)] = new_point_lb
+            left_points[round(new_point_lt[0][1], 4)] = new_point_lt
 
         # create and link top/right boundaries
         if y == size - 1:
             bound_point_1 = list((2*x - y - 1) * vec_x + 2*(y + 1)*vec_y)[0:2]
             bount_point_2 = list((2*x - y) * vec_x + 2*(y + 1)* vec_y)[0:2]
-            bottom_points[bound_point_1[0]][1].append(bound_point_1)
-            bottom_points[bount_point_2[0]][1].append(bount_point_2)
+            bottom_points[round(bound_point_1[0], 4)][1].append(bound_point_1)
+            bottom_points[round(bount_point_2[0], 4)][1].append(bount_point_2)
         if x == size - 1:
             bound_point_3 = list((2*x - y  + 2)* vec_x + 2*y      * vec_y)[0:2]
             bount_point_4 = list((2*x - y  + 2)* vec_x +(2*y + 1) * vec_y)[0:2]
-            left_points[bound_point_3[1]][1].append(bound_point_3)
-            left_points[bount_point_4[1]][1].append(bount_point_4)
+            left_points[round(bound_point_3[1], 4)][1].append(bound_point_3)
+            left_points[round(bount_point_4[1], 4)][1].append(bount_point_4)
             if y == size - 1:
                 corner_point = list((2*x - y  + 1)* vec_x +(2*y + 2) * vec_y)[0:2]
                 bottom_points[0.0][1].append(corner_point)
@@ -487,13 +487,14 @@ if __name__ == '__main__':
         ([5.25, 3.897114317029974], []),
         ([3.75, 3.897114317029974], []),
     ]
+    test = full_lattice_from_basis_vectors(3)
     big_lattice_points = [point for point in big_lattice_points if point[0] < 12 and point[1] < 9]
     rcParams.update({'font.size': 11})
     lattice_size = 10
     site_size = 16
 
     # filled_lattice = find_ox_sites(big_lattice_points)
-    filled_lattice = find_ox_sites_bounds(test_points)
+    filled_lattice = find_ox_sites_bounds(test)
     filled_lattice.plot_report(lattice_size, site_size)
     # points = full_lattice_from_basis_vectors(size=2)
     # filled_lattice = find_ox_sites_bounds(points)
@@ -504,6 +505,7 @@ if __name__ == '__main__':
     # solved_lattice = fill_oxygen_midonly(filled_lattice)
     # shuffle(filled_lattice.midpoints)
     # shuffle(filled_lattice.tripoints)
+    exit(0)
     solution_list = Solver(filled_lattice).start_solve(depth=0)
     
     # Use the "just look at it" theorum to select for unique solutions

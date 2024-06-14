@@ -67,6 +67,7 @@ def from_size(
     plot: Annotated[
         bool,
         typer.Option(
+            "--plot", "-p",
             help="Show the created base lattice and found interface configurations."
         ),
     ] = False,
@@ -76,6 +77,32 @@ def from_size(
             help="Save found interface configurations to given directory. Directory must not exist."
         ),
     ] = "",
+    max_singlets: Annotated[
+        int,
+        typer.Option(
+            help="Maximum amount of singlets allowed for this new layer."
+        )
+    ] = 2,
+    use_parallel: Annotated[
+        bool,
+        typer.Option(
+            "--parallel", "-P",
+            help="Use the parallel version of the solving method."
+        ),
+    ] = False,
+    use_filter: Annotated[
+        bool,
+        typer.Option(
+            "--filter", "-f",
+            help="Use the similarity filter. This filter attempts to cull structures which are translations and rotations of existing structures."
+        ),
+    ] = False,
+    difference_distance: Annotated[
+        float,
+        typer.Option(
+            help="Maximum delta between distances allowed when using similarity filter. Does nothing when this filter is not used."
+        )
+    ] = 0.05,
 ):
     """
     Create SiO2 interface structures for a SiC unit cell with 4*size attachment points.
@@ -113,10 +140,17 @@ def from_size(
         )
         plt.show()
 
-    bit_lattice = lattice.get_intermediary()
+    bit_lattice = lattice.get_intermediary(
+        max_singlets=max_singlets, 
+        difference_distance=difference_distance, 
+        use_filter=use_filter
+    )
     print(bit_lattice)
 
-    solutions = bit_lattice.solve(True)
+    if use_parallel:
+        solution = bit_lattice.solve_parallel(True)
+    else:
+        solutions = bit_lattice.solve(True)
 
     progress = tqdm(
         enumerate(solutions),

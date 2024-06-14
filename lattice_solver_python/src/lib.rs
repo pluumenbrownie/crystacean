@@ -1,3 +1,4 @@
+use ::lattice_solver::BitArrayFilter;
 use ::lattice_solver::BitArraySettings;
 use pyo3::prelude::*;
 use std::ffi::OsString;
@@ -41,6 +42,14 @@ impl BitArrayRepresentation {
     fn solve(&self, find_all: bool) -> Vec<BitArraySolution> {
         self.wrapped
             .solve(find_all, false)
+            .into_iter()
+            .map(|a| BitArraySolution { wrapped: a })
+            .collect()
+    }
+
+    fn solve_parallel(&self, find_all: bool) -> Vec<BitArraySolution> {
+        self.wrapped
+            .solve_parallel(find_all, false)
             .into_iter()
             .map(|a| BitArraySolution { wrapped: a })
             .collect()
@@ -94,13 +103,18 @@ impl Lattice {
         self.wrapped.singlets_to_plot()
     }
 
-    #[pyo3(signature = (max_singlets=2, difference_distance=0.05, max=None))]
-    fn get_intermediary(&self, max_singlets: usize, difference_distance: f32, max: Option<(f32, f32)>) -> BitArrayRepresentation {
+    #[pyo3(signature = (max_singlets=2, difference_distance=0.05, max=None, use_filter=false))]
+    fn get_intermediary(&self, max_singlets: usize, difference_distance: f32, max: Option<(f32, f32)>, use_filter: bool) -> BitArrayRepresentation {
         BitArrayRepresentation {
             wrapped: self.wrapped.get_intermediary(BitArraySettings::create(
                     max_singlets,
                     difference_distance,
                     max.unwrap_or(self.wrapped.find_max()),
+                    if use_filter {
+                        BitArrayFilter::Similarity
+                    } else {
+                        BitArrayFilter::None
+                    }
                 )
             ),
         }

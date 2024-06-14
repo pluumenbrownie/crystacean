@@ -501,50 +501,6 @@ impl BitArrayRepresentation {
                     }
                     c
                 })
-                .filter(|c| {
-                    let type_distribution = (
-                        c.union_count(&self.tripoint_mask),
-                        c.union_count(&self.midpoint_mask),
-                        c.union_count(&self.singlet_mask),
-                    );
-                    let mut distances_array = vec![];
-                    let ones = c.ones().collect_vec();
-                    for (one, two) in ones.into_iter().tuple_combinations() {
-                        let distance = self.distances_matrix[one][two];
-                        if distance > 0.0 {
-                            distances_array.push(distance);
-                        };
-                    }
-                    distances_array.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-
-                    if !structure_archive.contains(&type_distribution) {
-                        structure_archive.insert(type_distribution, vec![]).unwrap();
-                    }
-
-                    let structures = structure_archive.get(&type_distribution).unwrap();
-                    let mut unique = true;
-
-                    'outer: for structure in structures.get() {
-                        for point in 0..structure.len() {
-                            if (distances_array[point] - structure[point]).abs()
-                                > self.options.difference_distance
-                            {
-                                continue 'outer;
-                            }
-                        }
-                        unique = false;
-                        break;
-                    }
-
-                    if unique {
-                        structure_archive
-                            .get(&type_distribution)
-                            .unwrap()
-                            .get_mut()
-                            .push(distances_array);
-                    }
-                    unique
-                })
                 .collect();
 
             mem::swap(&mut current_generation, &mut next_generation);
