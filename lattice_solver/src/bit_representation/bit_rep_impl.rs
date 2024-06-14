@@ -248,80 +248,80 @@ impl BitArrayRepresentation {
         }
     }
 
+    // /// Starts the solving process.
+    // ///
+    // /// `find_all` can be set to `true` to find all
+    // #[must_use]
+    // pub fn solve(&self, find_all: bool, silent: bool) -> Vec<BitArraySolution> {
+    //     let test_lattice = self.filled_sites.clone();
+
+    //     let mut current_generation = vec![test_lattice];
+    //     let mut next_generation = vec![];
+    //     let mut depth = 0;
+    //     let mut solutions = vec![];
+    //     kdam::term::init(stderr().is_terminal());
+
+    //     while solutions.is_empty() | (find_all & (!next_generation.is_empty())) {
+    //         depth += 1;
+
+    //         next_generation.clear();
+
+    //         let iterator = if silent {
+    //             tqdm!(
+    //                 current_generation.iter(),
+    //                 disable = true,
+    //                 position = 1,
+    //                 bar_format = ""
+    //             )
+    //         } else {
+    //             tqdm!(
+    //                 current_generation.iter(),
+    //                 desc = format!("Current depth: {depth}"),
+    //                 mininterval = 1.0/60.0,
+    //                 bar_format = "{desc suffix=' '}|{animation}| {spinner} {count}/{total} [{percentage:.0}%] in {elapsed human=true} ({rate:.1}/s, eta: {remaining human=true})",
+    //                 colour = Colour::gradient(&["#FF0000", "#FFDD00"]),
+    //                 spinner = Spinner::new(
+    //                     &["▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█", "▇█▇", "█▇▆", "▇▆▅", "▆▅▄", "▅▄▃", "▄▃▂", "▃▂▁", "▂▁▂"],
+    //                     60.0,
+    //                     1.0,
+    //                 ),
+    //                 leave = true,
+    //                 position = 1
+    //             )
+    //         };
+
+    //         for candidate in iterator {
+    //             if let Ok(possibilities) = self.get_possibilities(candidate) {
+    //                 if possibilities.is_clear() {
+    //                     solutions.push(BitArraySolution(candidate.clone()));
+    //                     continue;
+    //                 }
+
+    //                 for fillable_site in possibilities.ones() {
+    //                     let mut new_candidate = candidate.clone();
+    //                     new_candidate.set(fillable_site, true);
+
+    //                     next_generation.push(new_candidate);
+    //                 }
+    //             }
+    //         }
+
+    //         mem::swap(&mut current_generation, &mut next_generation);
+    //     }
+    //     if let Some(filter) = &self.filter {
+    //         for solution in &mut solutions {
+    //             solution.inflate(filter);
+    //         }
+    //     }
+    //     println!();
+    //     solutions
+    // }
+
     /// Starts the solving process.
     ///
     /// `find_all` can be set to `true` to find all
     #[must_use]
     pub fn solve(&self, find_all: bool, silent: bool) -> Vec<BitArraySolution> {
-        let test_lattice = self.filled_sites.clone();
-
-        let mut current_generation = vec![test_lattice];
-        let mut next_generation = vec![];
-        let mut depth = 0;
-        let mut solutions = vec![];
-        kdam::term::init(stderr().is_terminal());
-
-        while solutions.is_empty() | (find_all & (!next_generation.is_empty())) {
-            depth += 1;
-
-            next_generation.clear();
-
-            let iterator = if silent {
-                tqdm!(
-                    current_generation.iter(),
-                    disable = true,
-                    position = 1,
-                    bar_format = ""
-                )
-            } else {
-                tqdm!(
-                    current_generation.iter(),
-                    desc = format!("Current depth: {depth}"),
-                    mininterval = 1.0/60.0,
-                    bar_format = "{desc suffix=' '}|{animation}| {spinner} {count}/{total} [{percentage:.0}%] in {elapsed human=true} ({rate:.1}/s, eta: {remaining human=true})",
-                    colour = Colour::gradient(&["#FF0000", "#FFDD00"]),
-                    spinner = Spinner::new(
-                        &["▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█", "▇█▇", "█▇▆", "▇▆▅", "▆▅▄", "▅▄▃", "▄▃▂", "▃▂▁", "▂▁▂"],
-                        60.0,
-                        1.0,
-                    ),
-                    leave = true,
-                    position = 1
-                )
-            };
-
-            for candidate in iterator {
-                if let Ok(possibilities) = self.get_possibilities(candidate) {
-                    if possibilities.is_clear() {
-                        solutions.push(BitArraySolution(candidate.clone()));
-                        continue;
-                    }
-
-                    for fillable_site in possibilities.ones() {
-                        let mut new_candidate = candidate.clone();
-                        new_candidate.set(fillable_site, true);
-
-                        next_generation.push(new_candidate);
-                    }
-                }
-            }
-
-            mem::swap(&mut current_generation, &mut next_generation);
-        }
-        if let Some(filter) = &self.filter {
-            for solution in &mut solutions {
-                solution.inflate(filter);
-            }
-        }
-        println!();
-        solutions
-    }
-
-    /// Starts the solving process.
-    ///
-    /// `find_all` can be set to `true` to find all
-    #[must_use]
-    pub fn solve_filtered(&self, find_all: bool, silent: bool) -> Vec<BitArraySolution> {
         let test_lattice = self.filled_sites.clone();
 
         let mut current_generation = vec![test_lattice];
@@ -372,7 +372,7 @@ impl BitArrayRepresentation {
                         let mut new_candidate = candidate.clone();
                         new_candidate.set(fillable_site, true);
 
-                        if self.similarity_filter(&new_candidate, &mut structure_map) {
+                        if self.solving_filter(&new_candidate, &mut structure_map) {
                             next_generation.push(new_candidate);
                         }
                     }
@@ -389,6 +389,17 @@ impl BitArrayRepresentation {
         println!();
         println!();
         solutions
+    }
+
+    fn solving_filter(
+        &self,
+        new_candidate: &FixedBitSet,
+        structure_map: &mut HashMap<(usize, usize, usize), Vec<Vec<f32>>>
+    ) -> bool {
+        match self.options.solve_filter {
+            BitArrayFilter::None => true,
+            BitArrayFilter::Similarity => self.similarity_filter(new_candidate, structure_map),
+        }
     }
 
     pub(crate) fn similarity_filter(

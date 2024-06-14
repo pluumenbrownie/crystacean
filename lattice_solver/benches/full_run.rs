@@ -1,6 +1,6 @@
 #![allow(clippy::excessive_precision)]
 use criterion::{criterion_group, criterion_main, Criterion};
-use lattice_solver::{BitArraySettings, Lattice};
+use lattice_solver::{bit_array_settings, BitArraySettings, Lattice};
 use std::time::Duration;
 
 fn criterion_long(c: &mut Criterion) {
@@ -39,7 +39,7 @@ fn criterion_long(c: &mut Criterion) {
         (vec![3.75, 3.897114317029974], vec![]),
     ];
     let lattice = Lattice::python_new(lattice_points, 1.1, true);
-    let options = BitArraySettings::create(2, 0.1, lattice.find_max());
+    let options = bit_array_settings!(&lattice);
     let bit_lattice = lattice.get_intermediary(options);
     let mut test_bitarray = bit_lattice.get_bitarray();
     test_bitarray.set(0, true);

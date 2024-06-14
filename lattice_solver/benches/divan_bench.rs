@@ -1,5 +1,5 @@
 #![allow(clippy::excessive_precision)]
-use lattice_solver::{BitArraySettings, Lattice};
+use lattice_solver::{BitArraySettings, Lattice, bit_array_settings};
 use termion::{clear, cursor};
 
 fn lattice_points() -> Vec<(Vec<f32>, Vec<Vec<f32>>)> {
@@ -44,7 +44,7 @@ fn full_run(silent: bool) -> Vec<lattice_solver::BitArraySolution> {
     let lattice_points = lattice_points();
 
     let lattice = Lattice::python_new(lattice_points, 1.1, true);
-    let options = BitArraySettings::create(2, 0.1, lattice.find_max());
+    let options = bit_array_settings!(lattice);
 
     let bit_lattice = lattice.get_intermediary(options);
 
@@ -59,7 +59,7 @@ fn full_run_parallel(silent: bool) -> Vec<lattice_solver::BitArraySolution> {
 
     let lattice = Lattice::python_new(lattice_points, 1.1, true);
 
-    let options = BitArraySettings::create(2, 0.1, lattice.find_max());
+    let options = bit_array_settings!(lattice);
     let bit_lattice = lattice.get_intermediary(options);
 
     let result = bit_lattice.solve_parallel(true, silent);

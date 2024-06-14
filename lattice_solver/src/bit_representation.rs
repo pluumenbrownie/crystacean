@@ -1,6 +1,7 @@
 use fixedbitset::FixedBitSet;
 
 mod bit_rep_impl;
+use crate::*;
 
 pub struct BitArrayRepresentation {
     pub filled_sites: FixedBitSet,
@@ -19,17 +20,103 @@ pub struct BitArraySettings {
     pub difference_distance: f32,
     pub max_x: f32,
     pub max_y: f32,
+    pub solve_filter: BitArrayFilter,
 }
 
 impl BitArraySettings {
-    pub const fn create(max_singlets: usize, difference_distance: f32, max: (f32, f32)) -> Self {
+    pub const fn create(
+        max_singlets: usize,
+        difference_distance: f32,
+        max: (f32, f32),
+        solve_filter: BitArrayFilter,
+    ) -> Self {
         Self {
             max_singlets,
             difference_distance,
             max_x: max.0,
             max_y: max.1,
+            solve_filter,
         }
     }
+
+    pub fn default(lattice: &Lattice) -> Self {
+        let max = lattice.find_max();
+        Self {
+            max_singlets: 2,
+            difference_distance: 0.05,
+            max_x: max.0,
+            max_y: max.1,
+            solve_filter: BitArrayFilter::default(),
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct SettingsBuilder {
+    max_singlets: Option<usize>,
+    difference_distance: Option<f32>,
+    max: Option<(f32, f32)>,
+    solve_filter: Option<BitArrayFilter>,
+}
+
+impl SettingsBuilder {
+    pub const fn max_singlets(self, value: usize) -> Self {
+        Self {
+            max_singlets: Some(value),
+            difference_distance: self.difference_distance,
+            max: self.max,
+            solve_filter: self.solve_filter,
+        }
+    }
+    pub const fn difference_distance(self, value: f32) -> Self {
+        Self {
+            max_singlets: self.max_singlets,
+            difference_distance: Some(value),
+            max: self.max,
+            solve_filter: self.solve_filter,
+        }
+    }
+    pub const fn max(self, value: (f32, f32)) -> Self {
+        Self {
+            max_singlets: self.max_singlets,
+            difference_distance: self.difference_distance,
+            max: Some(value),
+            solve_filter: self.solve_filter,
+        }
+    }
+    pub const fn solve_filter(self, value: BitArrayFilter) -> Self {
+        Self {
+            max_singlets: self.max_singlets,
+            difference_distance: self.difference_distance,
+            max: self.max,
+            solve_filter: Some(value),
+        }
+    }
+    pub fn build(self, lattice: &Lattice) -> BitArraySettings {
+        BitArraySettings::create(
+            self.max_singlets.unwrap_or(2),
+            self.difference_distance.unwrap_or(0.05),
+            self.max.unwrap_or_else(|| lattice.find_max()),
+            self.solve_filter.unwrap_or_default(),
+        )
+    }
+}
+
+#[macro_export]
+macro_rules! bit_array_settings {
+    ( $latt:expr, $($setter_method: ident = $value: expr),*) => {
+        // use lattice_solver::SettingsBuilder;
+        lattice_solver::SettingsBuilder::default()$(.$setter_method($value))*.build(&$latt);
+    };
+
+    ( $latt:expr ) => {BitArraySettings::default(&$latt);};
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub enum BitArrayFilter {
+    #[default]
+    None,
+    Similarity,
 }
 
 #[derive(Debug, PartialEq, Eq, Default)]

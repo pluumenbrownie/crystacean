@@ -38,6 +38,9 @@ name = "solve"
 [[example]]
 name = "parallel"
 
+[[example]]
+name = "macro_test"
+
 [profile.bench]
 debug = true 
 
