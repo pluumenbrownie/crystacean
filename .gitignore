@@ -1,5 +1,6 @@
 __pycache__
 .micromamba
 .mamba
+.vscode
 DFT_results
 *.prof
