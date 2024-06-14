@@ -1,13 +1,13 @@
 [package]
-name = "lattice_solver_python"
-version = "1.0.0"
+name = "crystacean"
+version = "1.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "lattice_solver_python"
+name = "crystacean"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = "0.19.0"
+pyo3 = "0.21.2"
 lattice_solver = { path = "../lattice_solver" }

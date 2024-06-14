@@ -2,7 +2,9 @@
 #![allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
-    clippy::cast_possible_truncation
+    clippy::cast_possible_truncation,
+    clippy::wildcard_imports,
+    clippy::must_use_candidate
 )]
 // Optimisation Ideas:
 // - Turn current/next generation into hashsets to remove archive requirement
@@ -15,629 +17,30 @@
 use fixedbitset::FixedBitSet;
 use itertools::{izip, Itertools};
 use json::{object, JsonValue};
-use kdam::{par_tqdm, tqdm, Colour, Spinner};
-use scc::Bag;
 use std::{
-    collections::HashSet,
-    f32::consts::PI,
     ffi::OsString,
     fs::File,
-    io::{stderr, IsTerminal},
     iter::zip,
-    mem,
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
 use kiddo::{KdTree, SquaredEuclidean};
-use rayon::prelude::*;
 use std::io::prelude::*;
 
-// const TRIPLE_CROWN: [f32; 9] = [
-//     -0.000082766,
-//     -1.397718937,
-//     -0.517599594,
+mod points;
+use points::*;
 
-//     -1.222253196,
-//     0.702780512,
-//     -0.517599594,
+mod bit_representation;
+pub use bit_representation::*;
 
-//     1.204777673,
-//     0.711865236,
-//     -0.517599594,
-// ];
-// const DOUBLE_CROWN: [f32; 6] = [
-//     2.2252961107321143 - 1.0526814404964109,
-//     -1.3867293215799141 - -1.0917258490752173,
-//     -(9.26392293591872 - 8.41953003801284),
+mod inserters;
+use inserters::*;
 
-//     2.2252961107321143 - 3.3223088674933625,
-//     -1.3867293215799141 - -1.6248356621955473,
-//     -(9.26392293591872 - 8.313286837087986),
-// ];
-const SINGLE_CROWN: [f32; 3] = [0.0, 0.0, -1.7];
+mod crown;
+use crown::*;
 
-fn double_crown_rotated(theta: f32) -> [f32; 6] {
-    // println!("{theta:?}");
-    let r = (2.2252961107321143 - 1.0526814404964109_f32)
-        .hypot(-1.3867293215799141 - -1.0917258490752173_f32);
-    [
-        r * (theta).cos(),
-        r * (theta).sin(),
-        -(9.26392293591872 - 8.41953003801284),
-        r * (theta + PI).cos(),
-        r * (theta + PI).sin(),
-        -(9.26392293591872 - 8.313286837087986),
-    ]
-}
+pub mod site_filter;
 
-#[allow(clippy::suboptimal_flops)]
-fn triple_crown_rotated(theta: f32) -> [f32; 9] {
-    let r = (-0.000082766_f32).hypot(-1.397718937_f32);
-    [
-        r * (theta).cos(),
-        r * (theta).sin(),
-        -0.517599594,
-        r * (theta + (2.0 / 3.0 * PI)).cos(),
-        r * (theta + (2.0 / 3.0 * PI)).sin(),
-        -0.517599594,
-        r * (theta - (2.0 / 3.0 * PI)).cos(),
-        r * (theta - (2.0 / 3.0 * PI)).sin(),
-        -0.517599594,
-    ]
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct OxygenIndex(usize);
-
-#[derive(Clone, Copy, Debug)]
-struct LatticeIndex(usize);
-
-#[derive(Debug)]
-struct LatticePoint {
-    x: f32,
-    y: f32,
-    z: f32,
-    connected_to: RwLock<Vec<OxygenIndex>>,
-    ghost_to: Option<Arc<LatticePoint>>,
-}
-
-impl LatticePoint {
-    fn new(x: f32, y: f32, z: f32, ghost_to: Option<Arc<Self>>) -> Arc<Self> {
-        Arc::new(Self {
-            x,
-            y,
-            z,
-            connected_to: RwLock::new(vec![]),
-            ghost_to,
-        })
-    }
-
-    fn get_connections(&self) -> &RwLock<Vec<OxygenIndex>> {
-        self.ghost_to
-            .as_ref()
-            .map_or(&self.connected_to, |_| &self.connected_to)
-    }
-
-    #[allow(clippy::suboptimal_flops)]
-    fn distance_squared_to(&self, other: &Self) -> f32 {
-        (self.x - other.x).powi(2) + (self.y - other.y).powi(2) + (self.z - other.z).powi(2)
-    }
-}
-
-#[derive(Clone)]
-struct Oxygen {
-    x: f32,
-    y: f32,
-    z: f32,
-    sitetype: SiteType,
-    exclusions: Vec<OxygenIndex>,
-}
-
-impl Oxygen {
-    const fn new(x: f32, y: f32, z: f32, sitetype: SiteType) -> Self {
-        Self {
-            x,
-            y,
-            z,
-            sitetype,
-            exclusions: vec![],
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-enum SiteType {
-    Singlet(Singlet),
-    Midpoint(Midpoint),
-    Tripoint(Tripoint),
-}
-
-impl SiteType {
-    fn iter(&self) -> std::slice::Iter<'_, LatticeIndex> {
-        match self {
-            Self::Tripoint(c) => c.0.iter(),
-            Self::Midpoint(c) => c.0.iter(),
-            Self::Singlet(c) => c.0.iter(),
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-struct Singlet([LatticeIndex; 1]);
-
-#[derive(Clone, Copy)]
-struct Midpoint([LatticeIndex; 2]);
-
-#[derive(Clone, Copy)]
-struct Tripoint([LatticeIndex; 3]);
-
-#[derive(Debug, PartialEq, Eq, Default)]
-pub struct BitArraySolution(pub FixedBitSet);
-
-impl BitArraySolution {
-    /// Convert a solution from a filtered `BitArrayRepresentation` back into
-    /// it's full form.
-    ///
-    /// ```
-    /// use lattice_solver::BitArraySolution;
-    /// use fixedbitset::FixedBitSet;
-    ///
-    /// let mut compressed = BitArraySolution(
-    ///     FixedBitSet::with_capacity_and_blocks(4, vec![0b10110])
-    /// );
-    /// let full = BitArraySolution(
-    ///     FixedBitSet::with_capacity_and_blocks(6, vec![0b1001010000])
-    /// );
-    /// let filter = FixedBitSet::with_capacity_and_blocks(6, vec![0b1101011000]);
-    ///
-    /// compressed.inflate(&filter);
-    /// assert_eq!(compressed, full);
-    /// ```
-    /// Shown schematically:
-    /// ```text
-    /// 10 1 10
-    /// 1101011000
-    /// 1001010000
-    /// ```
-    pub fn inflate(&mut self, filter_bitset: &FixedBitSet) {
-        let mut new_vector = FixedBitSet::with_capacity(filter_bitset.len());
-        for (self_number, new_location) in filter_bitset.ones().enumerate() {
-            new_vector.set(new_location, self.0[self_number]);
-        }
-        self.0 = new_vector;
-    }
-
-    #[must_use]
-    pub fn __str__(&self) -> String {
-        format!("{}", self.0)
-    }
-}
-
-pub struct BitArrayRepresentation {
-    filled_sites: FixedBitSet,
-    exclusion_matrix: Vec<FixedBitSet>,
-    tripoint_mask: FixedBitSet,
-    midpoint_mask: FixedBitSet,
-    singlet_mask: FixedBitSet,
-    filter: Option<FixedBitSet>,
-    options: BitArraySettings,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct BitArraySettings {
-    pub max_singlets: usize,
-}
-
-impl BitArrayRepresentation {
-    /// Create a `BitArrayRepresentation` for testing purpouses.
-    // #[cfg(doctest)]
-    #[must_use]
-    pub fn create_debug(
-        filled_sites: FixedBitSet,
-        exclusion_matrix: Vec<FixedBitSet>,
-        tripoint_mask: FixedBitSet,
-        midpoint_mask: FixedBitSet,
-        singlet_mask: FixedBitSet,
-        filter: Option<FixedBitSet>,
-        options: BitArraySettings,
-    ) -> Self {
-        Self {
-            filled_sites,
-            exclusion_matrix,
-            tripoint_mask,
-            midpoint_mask,
-            singlet_mask,
-            filter,
-            options,
-        }
-    }
-
-    /// Performes a binary matrix-vector multiply between `self.exclusion_matrix`
-    /// and the given solution `vector`. This method is used in `self.get_possibilities`
-    /// to reveal the available silicon sites for a given solution.
-    ///
-    /// In this method, the input matrix is bitwise `AND`ed with each column of
-    /// the exclusion matrix. The bits of the output vector are then set to 0
-    /// if an AND operation between the input vector and the corresponding column
-    /// of the matrix contain any ones.
-    ///
-    /// This method should not be used directly, use `self.get_possibilities` instead.
-    ///
-    /// ## Example:
-    /// ```
-    /// # use lattice_solver::{BitArraySolution, BitArrayRepresentation};
-    /// # use fixedbitset::FixedBitSet;
-    /// #
-    /// let bit_array_repr = BitArrayRepresentation::create_debug(
-    ///     //                    11000
-    ///     //                    11000
-    ///     // exclusion_matrix = 00110
-    ///     //                    00110
-    ///     //                    00001
-    ///     # FixedBitSet::with_capacity_and_blocks(5, vec![0b00000]),
-    ///     # vec![
-    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]),
-    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]),
-    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b01100]),
-    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b01100]),
-    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b10000]),
-    ///     # ],
-    ///     # FixedBitSet::new(),
-    ///     # FixedBitSet::new(),
-    ///     # FixedBitSet::new(),
-    ///     # None
-    /// );
-    ///
-    /// let potential_solution = FixedBitSet::with_capacity_and_blocks(5, vec![0b11000]);
-    /// let available_sites = bit_array_repr.matrix_vector_multiply(&potential_solution);
-    ///
-    /// let expected_answer = FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]);
-    /// assert_eq!(available_sites, expected_answer);
-    /// ```
-    /// Shown schematically:
-    /// ```text
-    /// 11000     0     1
-    /// 11000     0     1
-    /// 00110  x  0  =  0
-    /// 00110     1     0
-    /// 00001     1     0
-    /// ```
-    #[must_use]
-    pub fn matrix_vector_multiply(&self, vector: &FixedBitSet) -> FixedBitSet {
-        let mut output_vector = FixedBitSet::with_capacity(vector.len());
-        for bit_nr in 0..output_vector.len() {
-            output_vector.set(bit_nr, vector.is_disjoint(&self.exclusion_matrix[bit_nr]));
-        }
-        output_vector
-    }
-
-    /// Returns the valid available sites for the given `vector`.
-    ///
-    /// The valid sites are determined by:
-    /// 1. Obtaining available sites by using `self.matrix_vector_multiply`.
-    /// 1. available sites are checked with tripoint and midpoint mask.
-    ///     - if tripoints or midpoints are available, singlet possibilities are
-    ///       masked out before the results vector is returned.
-    ///
-    /// There are 5 output scenarios:
-    /// # Outputs
-    ///  - possibilties is empty                       -> `Ok(empty vector)`
-    ///  - tri/mid `masked_possibilities` is empty
-    ///      - available singlets <= `self.max_singlets` -> `Ok(vector)`
-    ///  - tri/mid `masked_possibilities` is NOT empty   -> `Ok(masked_vector`)
-    ///
-    /// # Errors
-    ///  - possibilities is empty after `rightmost_mask` -> `Err(())`
-    ///  - tri/mid `masked_possibilities` is empty
-    ///      - available singlets >  `self.max_singlets` -> `Err(())`
-    /// Vectors which return `Err(())` should be ignored.
-    ///
-    /// ## Example:
-    /// ```
-    /// # use lattice_solver::{BitArraySolution, BitArrayRepresentation};
-    /// # use fixedbitset::FixedBitSet;
-    /// #
-    /// let bit_array_repr = BitArrayRepresentation::create_debug(
-    ///     //                    11000
-    ///     //                    11000
-    ///     // exclusion_matrix = 00110
-    ///     //                    00110
-    ///     //                    00001
-    ///     # FixedBitSet::with_capacity_and_blocks(5, vec![0b00000]),
-    ///     # vec![
-    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]),
-    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]),
-    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b01100]),
-    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b01100]),
-    ///     #     FixedBitSet::with_capacity_and_blocks(5, vec![0b10000]),
-    ///     # ],
-    ///     // tripoint, midpoint and singlet masks:
-    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b00011]),
-    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b01100]),
-    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b10000]),
-    ///     # None
-    /// );
-    ///
-    /// let tripoint_possible =
-    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b00010]);
-    /// let tripoint_possible_sites = bit_array_repr.get_possibilities(&tripoint_possible);
-    /// let tripoint_possible_answer =
-    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b01100]);
-    /// assert_eq!(tripoint_possible_sites, Ok(tripoint_possible_answer));
-    ///
-    /// let tripoint_impossible =
-    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b01001]);
-    /// let tripoint_impossible_sites = bit_array_repr.get_possibilities(&tripoint_impossible);
-    /// let tripoint_impossible_answer =
-    ///     FixedBitSet::with_capacity_and_blocks(5, vec![0b10000]);
-    /// assert_eq!(tripoint_impossible_sites, Ok(tripoint_impossible_answer));
-    /// ```
-    pub fn get_possibilities(&self, vector: &FixedBitSet) -> Result<FixedBitSet, ()> {
-        let non_singlet_mask: FixedBitSet = &self.tripoint_mask | &self.midpoint_mask;
-        let rightmost_bit = vector.maximum();
-
-        // If no possibilities found here, vector is solution
-        let mut possibilities: FixedBitSet = self.matrix_vector_multiply(vector);
-
-        // possible_sites can be reused later
-        let possible_sites = possibilities.count_ones(..);
-        if possible_sites == 0 {
-            return Ok(possibilities);
-        };
-
-        // Mask of bits covered in other threads. If a vector is empty after this, all
-        // possible following states of this vector will be covered by other threads.
-        if let Some(mask) = rightmost_bit {
-            possibilities.set_range(..mask, false);
-        };
-        if possibilities.is_clear() {
-            return Err(());
-        };
-
-        let masked_possibilities = &possibilities & &non_singlet_mask;
-        if masked_possibilities.is_clear() {
-            if possible_sites <= self.options.max_singlets {
-                Ok(possibilities)
-            } else {
-                Err(())
-            }
-        } else {
-            Ok(masked_possibilities)
-        }
-    }
-
-    /// Returns a clone of `self.filled_sites`.
-    #[must_use]
-    pub fn get_bitarray(&self) -> FixedBitSet {
-        self.filled_sites.clone()
-    }
-
-    #[must_use]
-    pub fn filtered(&self, filter: SiteFilter) -> Self {
-        // println!("{filter:?}");
-        let mut filter_set = FixedBitSet::with_capacity(self.filled_sites.len());
-        filter_set.toggle_range(..);
-        for number in filter.wrapped {
-            filter_set.set(number.0, false);
-        }
-        let new_length = filter_set.count_ones(..);
-
-        let filled_sites = FixedBitSet::with_capacity(new_length);
-
-        let mut tripoint_mask = FixedBitSet::with_capacity(new_length);
-        let mut midpoint_mask = FixedBitSet::with_capacity(new_length);
-        let mut singlet_mask = FixedBitSet::with_capacity(new_length);
-
-        let mut exclusion_matrix = vec![];
-
-        for (new_number, old_number) in filter_set.ones().enumerate() {
-            tripoint_mask.set(new_number, self.tripoint_mask[old_number]);
-            midpoint_mask.set(new_number, self.midpoint_mask[old_number]);
-            singlet_mask.set(new_number, self.singlet_mask[old_number]);
-
-            let mut new_matrix_row = FixedBitSet::with_capacity(new_length);
-            for (col_number, old_col_number) in filter_set.ones().enumerate() {
-                new_matrix_row.set(
-                    col_number,
-                    self.exclusion_matrix[old_number][old_col_number],
-                );
-            }
-            exclusion_matrix.push(new_matrix_row);
-        }
-
-        Self {
-            filled_sites,
-            exclusion_matrix,
-            tripoint_mask,
-            midpoint_mask,
-            singlet_mask,
-            filter: Some(filter_set),
-            options: self.options,
-        }
-    }
-
-    /// Starts the solving process.
-    ///
-    /// `find_all` can be set to `true` to find all
-    #[must_use]
-    pub fn solve(&self, find_all: bool, silent: bool) -> Vec<BitArraySolution> {
-        let test_lattice = self.filled_sites.clone();
-
-        let mut current_generation = vec![test_lattice];
-        let mut next_generation = vec![];
-        let mut depth = 0;
-        let mut solutions = vec![];
-        kdam::term::init(stderr().is_terminal());
-
-        while solutions.is_empty() | (find_all & (!next_generation.is_empty())) {
-            depth += 1;
-
-            next_generation.clear();
-
-            let iterator = if silent {
-                tqdm!(
-                    current_generation.iter(),
-                    disable = true,
-                    position = 1,
-                    bar_format = ""
-                )
-            } else {
-                tqdm!(
-                current_generation.iter(),
-                desc = format!("Current depth: {depth}"),
-                mininterval = 1.0/60.0,
-                bar_format = "{desc suffix=' '}|{animation}| {spinner} {count}/{total} [{percentage:.0}%] in {elapsed human=true} ({rate:.1}/s, eta: {remaining human=true})",
-                colour = Colour::gradient(&["#FF0000", "#FFDD00"]),
-                spinner = Spinner::new(
-                    &["▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█", "▇█▇", "█▇▆", "▇▆▅", "▆▅▄", "▅▄▃", "▄▃▂", "▃▂▁", "▂▁▂"],
-                    60.0,
-                    1.0,
-                ),
-                leave = true,
-                position = 1
-            )
-            };
-            for candidate in iterator {
-                if let Ok(possibilities) = self.get_possibilities(candidate) {
-                    if possibilities.is_clear() {
-                        solutions.push(BitArraySolution(candidate.clone()));
-                        continue;
-                    }
-
-                    for fillable_site in possibilities.ones() {
-                        let mut new_candidate = candidate.clone();
-                        new_candidate.set(fillable_site, true);
-
-                        next_generation.push(new_candidate);
-                    }
-                }
-            }
-
-            mem::swap(&mut current_generation, &mut next_generation);
-        }
-        if let Some(filter) = &self.filter {
-            for solution in &mut solutions {
-                solution.inflate(filter);
-            }
-        }
-        solutions
-    }
-
-    /// Starts the solving process.
-    ///
-    /// `find_all` can be set to `true` to find all
-    #[must_use]
-    pub fn solve_parallel(&self, find_all: bool, silent: bool) -> Vec<BitArraySolution> {
-        let test_lattice = self.filled_sites.clone();
-
-        let mut current_generation = vec![test_lattice];
-        let mut next_generation = vec![];
-        let mut depth = 0;
-        // let mut solutions = Mutex::new(vec![]);
-        let solution_bag: Bag<BitArraySolution> = Bag::default();
-        kdam::term::init(stderr().is_terminal());
-
-        while solution_bag.is_empty() | (find_all & (!next_generation.is_empty())) {
-            depth += 1;
-
-            next_generation.clear();
-
-            let iterator = if silent {
-                par_tqdm!(
-                    current_generation.par_iter(),
-                    disable = true,
-                    position = 1,
-                    bar_format = ""
-                )
-            } else { 
-                par_tqdm!(
-                    current_generation.par_iter(),
-                    desc = format!("Current depth: {depth}"),
-                    mininterval = 1.0/60.0,
-                    bar_format = "{desc suffix=' '}|{animation}| {spinner} {count}/{total} [{percentage:.0}%] in {elapsed human=true} ({rate:.1}/s, eta: {remaining human=true})",
-                    colour = Colour::gradient(&["#0000FF", "#00FFFF"]),
-                    spinner = Spinner::new(
-                        &["▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█", "▇█▇", "█▇▆", "▇▆▅", "▆▅▄", "▅▄▃", "▄▃▂", "▃▂▁", "▂▁▂"],
-                        60.0,
-                        1.0,
-                    ),
-                    leave = true,
-                    position = 1
-                )
-            };
-
-            next_generation = iterator
-                .map(|vector| (vector, self.get_possibilities(vector)))
-                .filter_map(|(v, c)| c.map_or_else(|_| None, |p| Some((v, p))))
-                .map(|(v, c)| {
-                    let mut new_candidates = vec![];
-                    for fillable_site in c.ones() {
-                        let mut new = v.clone();
-                        new.set(fillable_site, true);
-                        new_candidates.push(new);
-                    }
-                    (v, new_candidates)
-                })
-                .flat_map_iter(|(v, c)| {
-                    if c.is_empty() {
-                        solution_bag.push(BitArraySolution(v.clone()));
-                    }
-                    c
-                })
-                .collect();
-
-            mem::swap(&mut current_generation, &mut next_generation);
-        }
-        let mut solutions = vec![];
-        for mut solution in solution_bag {
-            if let Some(filter) = &self.filter {
-                solution.inflate(filter);
-            }
-            solutions.push(solution);
-        }
-        solutions
-    }
-
-    #[must_use]
-    pub fn __str__(&self) -> String {
-        let mut output = String::from("BitArrayRepresentation: {\n");
-
-        output += format!("  filled_sites = \n    {}\n", self.filled_sites).as_str();
-        output += "  exclusion_matrix = \n";
-        for (number, row) in self.exclusion_matrix.iter().enumerate() {
-            output += format!("{number:5}. {row}\n").as_str();
-        }
-        output += format!("  tripoint_mask = \n    {}\n", self.tripoint_mask).as_str();
-        output += format!("  midpoint_mask = \n    {}\n", self.midpoint_mask).as_str();
-        output += format!("  singlet_mask = \n    {}\n", self.singlet_mask).as_str();
-        output += "  filter = \n    ";
-        output += self
-            .filter
-            .as_ref()
-            .map_or_else(|| "None".into(), |fbs| format!("{fbs}"))
-            .as_str();
-        output += "\n}";
-
-        output
-    }
-
-    #[must_use]
-    pub fn __repr__(&self) -> String {
-        format!("BitArrayRepresentation[{}]", self.filled_sites)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct SiteFilter {
-    wrapped: Vec<OxygenIndex>,
-}
-
-impl SiteFilter {
-    #[must_use]
-    pub const fn empty() -> Self {
-        Self { wrapped: vec![] }
-    }
-}
 
 pub struct Lattice {
     points: Vec<Arc<LatticePoint>>,
@@ -684,6 +87,7 @@ impl Lattice {
     fn generate_intermediary(&self, options: BitArraySettings) -> BitArrayRepresentation {
         let filled_sites = FixedBitSet::with_capacity(self.oxygens.len());
         let mut exclusion_matrix: Vec<FixedBitSet> = vec![];
+        let mut distances_matrix = vec![];
 
         let mut tripoint_mask = FixedBitSet::with_capacity(self.oxygens.len());
         let mut midpoint_mask = FixedBitSet::with_capacity(self.oxygens.len());
@@ -694,6 +98,17 @@ impl Lattice {
             for exclusion in &oxygen.exclusions {
                 exclusions.set(exclusion.0, true);
             }
+
+            let mut distances_row = vec![];
+            for other in 0..self.oxygens.len() {
+                distances_row.push(if other > number {
+                    self.distance_between(OxygenIndex(number), OxygenIndex(other))
+                } else {
+                    0.0
+                });
+            }
+            distances_matrix.push(distances_row);
+
             match &oxygen.sitetype {
                 SiteType::Tripoint(_) => tripoint_mask.set(number, true),
                 SiteType::Midpoint(_) => midpoint_mask.set(number, true),
@@ -705,12 +120,54 @@ impl Lattice {
         BitArrayRepresentation {
             filled_sites,
             exclusion_matrix,
+            distances_matrix,
             tripoint_mask,
             midpoint_mask,
             singlet_mask,
             filter: None,
             options,
         }
+    }
+
+    pub fn find_max(&self) -> (f32, f32) {
+        let (mut max_x, mut max_y) = (0.0, 0.0);
+
+        for point in &self.points {
+            if point.x > max_x && point.y == 0.0 {
+                max_x = point.x;
+            }
+            if point.y > max_y {
+                max_y = point.y;
+            }
+        }
+
+        (max_x, max_y)
+    }
+
+    pub fn distance_between(&self, index_one: OxygenIndex, index_two: OxygenIndex) -> f32 {
+        let (max_x, max_y) = self.find_max();
+        let one = &self.oxygens[index_one.0];
+        let two = &self.oxygens[index_two.0];
+
+        let delta_x = {
+            let dx = (one.x - two.x).abs();
+            if dx > max_x / 2.0 {
+                dx - max_x
+            } else {
+                dx
+            }
+        };
+        let delta_y = {
+            let dy = (one.y - two.y).abs();
+            if dy > max_y / 2.0 {
+                dy - max_y
+            } else {
+                dy
+            }
+        };
+
+        #[allow(clippy::suboptimal_flops)]
+        (delta_x.powi(2) + delta_y.powi(2) + (one.z - two.z).powi(2)).sqrt()
     }
 
     /// `distance_margin` should be 1.1 for 2D, 1.4 for 3D
@@ -949,7 +406,7 @@ impl Lattice {
     /// # Panics
     /// Can panic when `Lattice` was not created from file.
     #[must_use]
-    pub fn no_rings(&self) -> SiteFilter {
+    pub fn no_rings(&self) -> site_filter::SiteFilter {
         let parsed = self.source_file.as_ref().unwrap();
 
         let last_id = &parsed["ids"][parsed["ids"].len() - 1].to_string();
@@ -1017,7 +474,7 @@ impl Lattice {
             }
         }
 
-        SiteFilter {
+        site_filter::SiteFilter {
             wrapped: disabled_oxygens,
         }
     }
@@ -1120,8 +577,7 @@ impl Lattice {
     /// Generates a more efficient representation of the lattice
     /// problem for the given lattice.
     #[must_use]
-    pub fn get_intermediary(&self, max_singlets: usize) -> BitArrayRepresentation {
-        let options = BitArraySettings { max_singlets };
+    pub fn get_intermediary(&self, options: BitArraySettings) -> BitArrayRepresentation {
         self.generate_intermediary(options)
     }
 
@@ -1297,118 +753,6 @@ impl Lattice {
     }
 }
 
-fn insert_singles(out_lattice: &mut Lattice) {
-    for (number, silicon) in out_lattice
-        .points
-        .iter()
-        .enumerate()
-        .filter(|s| s.1.ghost_to.is_none())
-    {
-        out_lattice.oxygens.push(Oxygen::new(
-            silicon.x,
-            silicon.y,
-            silicon.z - 1.7,
-            SiteType::Singlet(Singlet([LatticeIndex(number)])),
-        ));
-    }
-}
-
-fn insert_midpoints(
-    out_lattice: &mut Lattice,
-    kdtree: &kiddo::float::kdtree::KdTree<f32, u64, 3, 32, u32>,
-    node_search_distance: f32,
-) {
-    for (number, silicon) in out_lattice.points.iter().enumerate() {
-        let mut close_points = kdtree
-            .within::<SquaredEuclidean>(&[silicon.x, silicon.y, silicon.z], node_search_distance);
-        // Sort results on lattice number
-        close_points.sort_by_key(|p| p.item);
-        let sites = close_points
-            .iter()
-            .skip(1)
-            .filter(|s| s.item as usize > number)
-            .filter(|s| {
-                out_lattice.points[number].ghost_to.is_none()
-                    || out_lattice.points[s.item as usize].ghost_to.is_none()
-            });
-
-        for site in sites {
-            let x = (out_lattice.points[number].x + out_lattice.points[site.item as usize].x) / 2.0;
-            let y = (out_lattice.points[number].y + out_lattice.points[site.item as usize].y) / 2.0;
-            let z = (out_lattice.points[number].z + out_lattice.points[site.item as usize].z) / 2.0
-                - 1.4;
-            let sitetype = SiteType::Midpoint(Midpoint([
-                LatticeIndex(number),
-                LatticeIndex(site.item as usize),
-            ]));
-            out_lattice.oxygens.push(Oxygen::new(x, y, z, sitetype));
-        }
-    }
-}
-
-#[allow(clippy::float_cmp)]
-fn insert_tripoints(
-    out_lattice: &mut Lattice,
-    kdtree: &kiddo::float::kdtree::KdTree<f32, u64, 3, 32, u32>,
-    node_search_distance: f32,
-) {
-    let mut covered_sites = HashSet::new();
-    for (number, silicon) in out_lattice.points.iter().enumerate() {
-        let mut close_points = kdtree
-            .within::<SquaredEuclidean>(&[silicon.x, silicon.y, silicon.z], node_search_distance);
-        // Sort results on lattice number
-        close_points.sort_by_key(|p| p.item);
-        let sites = close_points
-            .iter()
-            .filter(|s| s.item as usize != number)
-            .combinations(2)
-            .filter(|a| {
-                let mut identifier = [number as u64, a[0].item, a[1].item];
-                identifier.sort_unstable();
-                covered_sites.insert(identifier)
-            })
-            .filter(|a| {
-                out_lattice.points[a[0].item as usize].x != out_lattice.points[a[1].item as usize].x
-            })
-            .filter(|a| {
-                out_lattice.points[number].ghost_to.is_none()
-                    || out_lattice.points[a[0].item as usize].ghost_to.is_none()
-                    || out_lattice.points[a[1].item as usize].ghost_to.is_none()
-            })
-            .filter(|a| {
-                out_lattice.points[a[0].item as usize]
-                    .distance_squared_to(&out_lattice.points[a[1].item as usize])
-                    <= node_search_distance
-            });
-
-        for site in sites {
-            let x = (out_lattice.points[number].x
-                + out_lattice.points[site[0].item as usize].x
-                + out_lattice.points[site[1].item as usize].x)
-                / 3.0;
-            let y = (out_lattice.points[number].y
-                + out_lattice.points[site[0].item as usize].y
-                + out_lattice.points[site[1].item as usize].y)
-                / 3.0;
-            let z = (out_lattice.points[number].z
-                + out_lattice.points[site[0].item as usize].z
-                + out_lattice.points[site[1].item as usize].z)
-                / 3.0
-                - 1.1;
-            let sitetype = SiteType::Tripoint(Tripoint([
-                LatticeIndex(number),
-                LatticeIndex(site[0].item as usize),
-                LatticeIndex(site[1].item as usize),
-            ]));
-            out_lattice.oxygens.push(Oxygen::new(x, y, z, sitetype));
-        }
-    }
-}
-
-fn double_angle(p1: &LatticePoint, p2: &LatticePoint) -> f32 {
-    PI - ((p2.y - p1.y) / (p2.x - p1.x).hypot(p2.y - p1.y)).acos()
-}
-
 fn create_silicon_lattice(lattice_3d: Vec<(Vec<f32>, Vec<Vec<f32>>)>) -> Lattice {
     let mut out_lattice = Lattice::new();
 
@@ -1450,56 +794,3 @@ fn turn_2d_3d(input_lattice: Vec<(Vec<f32>, Vec<Vec<f32>>)>) -> Vec<(Vec<f32>, V
         panic!("Input lattice layout is incorrect: points must be two or threedimentional.")
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     #[test]
-//     fn new_mmx() {
-//         let lattice_points = vec![
-//             (vec![1.5, 0.0], vec![vec![1.5, 5.196152422706632]]),
-//             (
-//                 vec![0.0, 0.0],
-//                 vec![
-//                     vec![0.0, 5.196152422706632],
-//                     vec![6.0, 0.0],
-//                     vec![6.0, 5.196152422706632],
-//                 ],
-//             ),
-//             (vec![2.25, 1.299038105676658], vec![]),
-//             (
-//                 vec![0.75, 1.299038105676658],
-//                 vec![vec![6.75, 1.299038105676658]],
-//             ),
-//             (vec![1.5, 2.598076211353316], vec![]),
-//             (
-//                 vec![0.0, 2.598076211353316],
-//                 vec![vec![6.0, 2.598076211353316]],
-//             ),
-//             (vec![2.25, 3.897114317029974], vec![]),
-//             (
-//                 vec![0.75, 3.897114317029974],
-//                 vec![vec![6.75, 3.897114317029974]],
-//             ),
-//             (vec![4.5, 0.0], vec![vec![4.5, 5.196152422706632]]),
-//             (vec![3.0, 0.0], vec![vec![3.0, 5.196152422706632]]),
-//             (vec![5.25, 1.299038105676658], vec![]),
-//             (vec![3.75, 1.299038105676658], vec![]),
-//             (vec![4.5, 2.598076211353316], vec![]),
-//             (vec![3.0, 2.598076211353316], vec![]),
-//             (vec![5.25, 3.897114317029974], vec![]),
-//             (vec![3.75, 3.897114317029974], vec![]),
-//         ];
-//         let lattice = Lattice::python_new(lattice_points);
-//         let bit_lattice = lattice.get_intermediary();
-//         let mut test_bitarray = bit_lattice.get_bitarray();
-//         test_bitarray.set(0, true);
-
-//         let old = dbg!(bit_lattice.get_possibilities_old(&test_bitarray));
-//         println!("{old}");
-//         let new = dbg!(bit_lattice.get_possibilities(&test_bitarray));
-//         println!("{new}");
-//         assert_eq!(old, new);
-//     }
-// }

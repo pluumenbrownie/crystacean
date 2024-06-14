@@ -9,7 +9,7 @@ from ase.io import read as aseread
 
 from classes import from_file as from_file_classes
 from findthosepoints import full_lattice_from_basis_vectors
-from lattice_solver_python import Lattice, from_dft_json
+from crystacean import Lattice, from_dft_json
 from cull_results import cull
 
 # Test libraries required for other files.
@@ -80,7 +80,7 @@ def from_size(
     """
     Create SiO2 interface structures for a SiC unit cell with 4*size attachment points.
     """
-    if not (plot and save_to):
+    if not (plot or save_to):
         print("NOTE: both plot and save_to are false!")
     if save_to:
         os.mkdir(save_to)
@@ -337,7 +337,7 @@ def ase_json_handler(
     save_to: str,
     filtered: bool,
 ):
-    if not (plot and save_to):
+    if not (plot or save_to):
         print("NOTE: both plot and save_to are false!")
     lattice = from_dft_json(filepath, distance_margin, False)
 

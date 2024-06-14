@@ -444,17 +444,60 @@ if __name__ == '__main__':
         ([7.7, 2.7], []),
         ([7.7, 8.0], []),
     ]
+    test_points = [
+        (
+            [1.5, 0.0], 
+            [[1.5, 5.196152422706632]]
+        ),
+        (
+            [0.0, 0.0],
+            [
+                [0.0, 5.196152422706632],
+                [6.0, 0.0],
+                [6.0, 5.196152422706632],
+            ],
+        ),
+        ([2.25, 1.299038105676658], []),
+        (
+            [0.75, 1.299038105676658],
+            [[6.75, 1.299038105676658]],
+        ),
+        ([1.5, 2.598076211353316], []),
+        (
+            [0.0, 2.598076211353316],
+            [[6.0, 2.598076211353316]],
+        ),
+        ([2.25, 3.897114317029974], []),
+        (
+            [0.75, 3.897114317029974],
+            [[6.75, 3.897114317029974]],
+        ),
+        (
+            [4.5, 0.0], 
+            [[4.5, 5.196152422706632]]
+        ),
+        (
+            [3.0, 0.0], 
+            [[3.0, 5.196152422706632]]
+        ),
+        ([5.25, 1.299038105676658], []),
+        ([3.75, 1.299038105676658], []),
+        ([4.5, 2.598076211353316], []),
+        ([3.0, 2.598076211353316], []),
+        ([5.25, 3.897114317029974], []),
+        ([3.75, 3.897114317029974], []),
+    ]
     big_lattice_points = [point for point in big_lattice_points if point[0] < 12 and point[1] < 9]
     rcParams.update({'font.size': 11})
     lattice_size = 10
     site_size = 16
 
-    filled_lattice = find_ox_sites(big_lattice_points)
+    # filled_lattice = find_ox_sites(big_lattice_points)
+    filled_lattice = find_ox_sites_bounds(test_points)
     filled_lattice.plot_report(lattice_size, site_size)
-    # filled_lattice = find_ox_sites_bounds(bigger_boundary_points)
     # points = full_lattice_from_basis_vectors(size=2)
     # filled_lattice = find_ox_sites_bounds(points)
-    # filled_lattice.plot_ghost_connections()
+    filled_lattice.plot_ghost_connections()
     # make_site_plot(filled_lattice, draw_single=True)
 
     # solved_lattice = fill_oxygen_maxtri(filled_lattice)

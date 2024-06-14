@@ -298,7 +298,8 @@ type Plottable = LatticePoint | SinglePoint | MidPoint | TriPoint
 
 if __name__ == '__main__':
     import os
-    path = "exports/sizeable_unique_1/(4, 0, 4)"
+
+    path = "exports/test2_unique_0_2/(6, 0, 1)"
     for structure in os.listdir(path):
         lattice = from_file(f"{path}/{structure}")
         lattice.plot(draw_single=True)

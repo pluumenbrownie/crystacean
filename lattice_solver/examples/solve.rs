@@ -1,6 +1,8 @@
 #![allow(clippy::excessive_precision)]
-use lattice_solver::Lattice;
 
+use lattice_solver::{
+    bit_array_settings, BitArrayFilter, BitArraySettings, Lattice
+};
 
 fn main() {
     let lattice_points = vec![
@@ -37,8 +39,39 @@ fn main() {
         (vec![5.25, 3.897114317029974], vec![]),
         (vec![3.75, 3.897114317029974], vec![]),
     ];
+    // let lattice_points = vec![
+    //     (
+    //         vec![3.076, 0.0], vec![vec![3.076, 5.327788284081867]]
+    //     ),
+    //     (
+    //         vec![0.0, 0.0], vec![
+    //             vec![0.0, 5.327788284081867],
+    //             vec![6.152, 0.0],
+    //             vec![6.152, 5.327788284081867]
+    //         ]
+    //     ),
+    //     (vec![4.614, 2.6638941420409337], vec![]),
+    //     (
+    //         vec![1.538, 2.6638941420409337], vec![vec![7.69, 2.6638941420409337]]
+    //     )
+    // ];
     let lattice = Lattice::python_new(lattice_points, 1.1, true);
-    let bit_lattice = lattice.get_intermediary(2);
 
-    let _ = bit_lattice.solve(true, false);
+    let options = bit_array_settings!(
+        lattice
+    );
+    let bit_lattice = lattice.get_intermediary(options);
+
+    // bit_lattice.print_distances();
+    println!("{}", bit_lattice.__str__());
+
+    let solutions = bit_lattice.solve(true, false);
+    println!("Solutions found: {}", solutions.len());
+
+    // let solutions_filtered = bit_lattice.solve_filtered(true, false);
+    // println!("Solutions found: {}", solutions.len());
+    // for (number, solution) in solutions.iter().enumerate() {
+    //     let solution_lattice = lattice.to_solved_lattice(solution);
+    //     solution_lattice.export(&OsString::from("../exports/test4"), format!("test2_{number}.json"));
+    // }
 }
