@@ -17,14 +17,9 @@
 use fixedbitset::FixedBitSet;
 use itertools::{izip, Itertools};
 use json::{object, JsonValue};
-use std::{
-    ffi::OsString,
-    fs::File,
-    iter::zip,
-    sync::Arc,
-};
+use std::{ffi::OsString, fs::File, iter::zip, sync::Arc};
 
-use kiddo::{KdTree, SquaredEuclidean};
+use kiddo::{float::kdtree::KdTree, SquaredEuclidean};
 use std::io::prelude::*;
 
 mod points;
@@ -41,6 +36,7 @@ use crown::*;
 
 pub mod site_filter;
 
+const BINSIZE: usize = 129;
 
 pub struct Lattice {
     points: Vec<Arc<LatticePoint>>,
@@ -194,7 +190,8 @@ impl Lattice {
             .iter()
             .map(|p| [p.x, p.y, p.z])
             .collect_vec();
-        let kdtree: KdTree<_, 3> = (&silicon_iterator).into();
+
+        let kdtree: KdTree<_, u64, 3, BINSIZE, u32> = KdTree::from(&silicon_iterator);
         let node_search_distance = if autodetect_margin {
             kdtree.nearest_n::<SquaredEuclidean>(&first_point_location, 2)[1].distance
                 * distance_margin
@@ -377,7 +374,7 @@ impl Lattice {
         let points_vector = self.points.iter().map(|p| [p.x, p.y, p.z]).collect_vec();
         println!("{points_vector:?}");
         println!("length: {}", points_vector.len());
-        let points_tree: KdTree<_, 3> = (&points_vector).into();
+        let points_tree: KdTree<_, u64, 3, BINSIZE, u32> = (&points_vector).into();
 
         let point_group_vector = {
             let mut point_group_vector = vec![1000; self.points.len()];
@@ -430,7 +427,7 @@ impl Lattice {
         let points_vector = self.points.iter().map(|p| [p.x, p.y, p.z]).collect_vec();
         // println!("{points_vector:?}");
         // println!("length: {}", points_vector.len());
-        let points_tree: KdTree<_, 3> = (&points_vector).into();
+        let points_tree: KdTree<_, u64, 3, 128, u32> = (&points_vector).into();
 
         let point_group_vector = {
             let mut point_group_vector = vec![1000; self.points.len()];
@@ -710,7 +707,6 @@ impl Lattice {
 
         let mut file = File::create(filename).expect("Folder does not exist!");
         file.write_all(export_data.pretty(4).as_bytes()).unwrap();
-        println!("Saved {filename}");
     }
 
     fn add_crown(

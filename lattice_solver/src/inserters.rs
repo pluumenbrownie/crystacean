@@ -21,7 +21,7 @@ pub fn insert_singles(out_lattice: &mut Lattice) {
 
 pub fn insert_midpoints(
     out_lattice: &mut Lattice,
-    kdtree: &kiddo::float::kdtree::KdTree<f32, u64, 3, 32, u32>,
+    kdtree: &kiddo::float::kdtree::KdTree<f32, u64, 3, BINSIZE, u32>,
     node_search_distance: f32,
 ) {
     for (number, silicon) in out_lattice.points.iter().enumerate() {
@@ -55,7 +55,7 @@ pub fn insert_midpoints(
 #[allow(clippy::float_cmp)]
 pub fn insert_tripoints(
     out_lattice: &mut Lattice,
-    kdtree: &kiddo::float::kdtree::KdTree<f32, u64, 3, 32, u32>,
+    kdtree: &kiddo::float::kdtree::KdTree<f32, u64, 3, BINSIZE, u32>,
     node_search_distance: f32,
 ) {
     let mut covered_sites = HashSet::new();

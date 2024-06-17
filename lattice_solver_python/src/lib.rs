@@ -142,8 +142,16 @@ impl Lattice {
         self.wrapped.diagnostic_ase();
     }
 
-    fn export_as_ase_json(&self, filename: String) {
-        self.wrapped.export_as_ase_json(&filename)
+
+    fn export_as_ase_json(&self, filename: String, folder: Option<String>) {
+        if let Some(folder_path) = folder {
+            let mut full_path = folder_path.clone();
+            full_path.push('/');
+            full_path.push_str(&filename);
+            self.wrapped.export_as_ase_json(&full_path)
+        } else {
+            self.wrapped.export_as_ase_json(&filename)
+        }
     }
 }
 

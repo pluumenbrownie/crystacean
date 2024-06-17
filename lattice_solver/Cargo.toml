@@ -41,6 +41,9 @@ name = "parallel"
 [[example]]
 name = "macro_test"
 
+[[example]]
+name = "from_json"
+
 [profile.bench]
 debug = true 
 

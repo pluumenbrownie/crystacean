@@ -24,6 +24,81 @@ cross_thickness = 4
 app = typer.Typer()
 
 
+PLOT_BOOL = Annotated[
+    bool,
+    typer.Option(
+        "--plot",
+        "-p",
+        help="Show the created base lattice and found interface configurations.",
+    ),
+]
+DIRPATH_STR = Annotated[
+    str,
+    typer.Argument(help="The input directory to find interface configurations for."),
+]
+CDM_FLOAT = Annotated[
+    float,
+    typer.Option(
+        "--creation-distance-margin",
+        "-c",
+        help="Maximum distance allowed between two attachment points when finding mid- and tripoints",
+    ),
+]
+SAVE_DESCRIPTION = (
+    "Save found interface configurations to given directory. Directory must not exist."
+)
+SAVETO_STR = Annotated[
+    str,
+    typer.Option("--save-to", "-s", help=SAVE_DESCRIPTION),
+]
+PARALLEL_BOOL = Annotated[
+    bool,
+    typer.Option(
+        "--parallel", "-l", help="Use the parallel version of the solving method."
+    ),
+]
+SINGLET_INT = Annotated[
+    int,
+    typer.Option(
+        "--max-singlets",
+        "-m",
+        help="Maximum amount of singlets allowed for this new layer.",
+    ),
+]
+SIMILARIRY_BOOL = Annotated[
+    bool,
+    typer.Option(
+        "--similarity-filter",
+        "-f",
+        help="Use the similarity filter. This filter attempts to cull structures which are translations and rotations of existing structures.",
+    ),
+]
+DD_FLOAT = Annotated[
+    float,
+    typer.Option(
+        "--difference-distance",
+        "-d",
+        help="Maximum delta between distances allowed when using similarity filter. Does nothing when this filter is not used.",
+    ),
+]
+RINGS_BOOL = Annotated[
+    bool,
+    typer.Option(
+        "--rings-filter",
+        "-r",
+        help="Whether to apply the no-rings filter to the given lattice. Disable this when considering the first layer.",
+    ),
+]
+ASE_BOOL = Annotated[
+    bool,
+    typer.Option(
+        "--save-ase-json",
+        "-j",
+        help="If true, the found structures get exported as an ASE parsable structure in json format.",
+    ),
+]
+
+
 @app.command()
 def plot(path_to_json: str):
     """
@@ -64,45 +139,12 @@ def from_size(
             help="Size of base lattice to use. Amount of attachment sites is 4*size."
         ),
     ] = 1,
-    plot: Annotated[
-        bool,
-        typer.Option(
-            "--plot", "-p",
-            help="Show the created base lattice and found interface configurations."
-        ),
-    ] = False,
-    save_to: Annotated[
-        str,
-        typer.Option(
-            help="Save found interface configurations to given directory. Directory must not exist."
-        ),
-    ] = "",
-    max_singlets: Annotated[
-        int,
-        typer.Option(
-            help="Maximum amount of singlets allowed for this new layer."
-        )
-    ] = 2,
-    use_parallel: Annotated[
-        bool,
-        typer.Option(
-            "--parallel", "-P",
-            help="Use the parallel version of the solving method."
-        ),
-    ] = False,
-    use_filter: Annotated[
-        bool,
-        typer.Option(
-            "--filter", "-f",
-            help="Use the similarity filter. This filter attempts to cull structures which are translations and rotations of existing structures."
-        ),
-    ] = False,
-    difference_distance: Annotated[
-        float,
-        typer.Option(
-            help="Maximum delta between distances allowed when using similarity filter. Does nothing when this filter is not used."
-        )
-    ] = 0.05,
+    plot: PLOT_BOOL = False,
+    save_to: SAVETO_STR = "",
+    max_singlets: SINGLET_INT = 2,
+    use_parallel: PARALLEL_BOOL = False,
+    similarity_filter: SIMILARIRY_BOOL = False,
+    difference_distance: DD_FLOAT = 0.05,
 ):
     """
     Create SiO2 interface structures for a SiC unit cell with 4*size attachment points.
@@ -141,9 +183,9 @@ def from_size(
         plt.show()
 
     bit_lattice = lattice.get_intermediary(
-        max_singlets=max_singlets, 
-        difference_distance=difference_distance, 
-        use_filter=use_filter
+        max_singlets=max_singlets,
+        difference_distance=difference_distance,
+        use_filter=similarity_filter,
     )
     print(bit_lattice)
 
@@ -177,7 +219,7 @@ def from_size(
                 *solved_lattice.midpoints_to_plot(),
                 "x",
                 markersize=site_size,
-                label="Midpoint", 
+                label="Midpoint",
                 markeredgewidth=cross_thickness,
             )
             plt.plot(
@@ -206,100 +248,66 @@ def from_size(
 @app.command()
 def from_file(
     filepath: Annotated[
-        str,
-        typer.Argument(
-            help="The input file to find interface configurations for."
-        )
+        str, typer.Argument(help="The input file to find interface configurations for.")
     ],
     prefix: Annotated[
-        str,
-        typer.Argument(
-            help="Identifying prefix to use when saving"
-        )
+        str, typer.Argument(help="Identifying prefix to use when saving")
     ],
-    distance_margin: Annotated[
-        float,
-        typer.Option(
-            help="Maximum distance allowed between two attachment points when finding mid- and tripoints"
-        ),
-    ] = 3.5,
-    plot: Annotated[
-        bool,
-        typer.Option(
-            help="Show the created base lattice and found interface configurations."
-        ),
-    ] = False,
-    save_to: Annotated[
-        str,
-        typer.Option(
-            help="Save found interface configurations to given directory. Directory must not exist."
-        ),
-    ] = "",
-    filtered: Annotated[
-        bool,
-        typer.Option(
-            help="Whether to apply the no-rings filter to the given lattice. Disable this when considering the first layer."
-        ),
-    ] = True,
+    creation_distance_margin: CDM_FLOAT = 3.5,
+    plot: PLOT_BOOL = False,
+    save_to: SAVETO_STR = "",
+    save_ase_json: ASE_BOOL = False,
+    rings_filter: RINGS_BOOL = False,
+    max_singlets: SINGLET_INT = 2,
+    use_parallel: PARALLEL_BOOL = False,
+    similarity_filter: SIMILARIRY_BOOL = False,
+    difference_distance: DD_FLOAT = 0.05,
 ):
     """
     Create interface configurations from ASE json file. File must contain cell data.
     """
     if save_to:
         os.mkdir(save_to)
-    ase_json_handler(filepath, prefix, distance_margin, plot, save_to, filtered)
+    ase_json_handler(
+        filepath,
+        prefix,
+        creation_distance_margin,
+        plot,
+        save_to,
+        save_ase_json,
+        rings_filter,
+        max_singlets,
+        use_parallel,
+        similarity_filter,
+        difference_distance,
+    )
 
 
 @app.command()
 def from_dft_folder(
-    dirpath: Annotated[
-        str,
-        typer.Argument(
-            help="The input directory to find interface configurations for."
-        )
-    ],
+    dirpath: DIRPATH_STR,
     save_to: Annotated[
         str,
-        typer.Argument(
-            help="Save found interface configurations to given directory. Directory must not exist."
-        ),
+        typer.Argument(help=SAVE_DESCRIPTION),
     ],
     prefix: Annotated[
-        str,
-        typer.Argument(
-            help="Identifying prefix to use when saving"
-        )
+        str, typer.Argument(help="Identifying prefix to use when saving")
     ],
-    distance_margin: Annotated[
-        float,
-        typer.Option(
-            help="Maximum distance allowed between two attachment points when finding mid- and tripoints"
-        ),
-    ] = 3.5,
-    plot: Annotated[
-        bool,
-        typer.Option(
-            help="Show the created base lattice and found interface configurations."
-        ),
-    ] = False,
-    filtered: Annotated[
-        bool,
-        typer.Option(
-            help="Whether to apply the no-rings filter to the given lattice. Disable this when considering the first layer."
-        ),
-    ] = True,
+    creation_distance_margin: CDM_FLOAT = 3.5,
+    plot: PLOT_BOOL = False,
+    rings_filter: RINGS_BOOL = True,
     output_file_name: Annotated[
         str,
-        typer.Option(
-            help="Filename of cp2k DFT result file."
-        ),
+        typer.Option(help="Filename of cp2k DFT result file."),
     ] = "SiC-pos-1.xyz",
     test_mode: Annotated[
         bool,
-        typer.Option(
-            help="Stop after creating tempfile."
-        ),
-    ] = False
+        typer.Option(help="Stop after creating tempfile."),
+    ] = False,
+    max_singlets: SINGLET_INT = 2,
+    use_parallel: PARALLEL_BOOL = False,
+    similarity_filter: SIMILARIRY_BOOL = False,
+    difference_distance: DD_FLOAT = 0.05,
 ):
     """
     Find next layer configurations directly from CP2K DFT results.
@@ -318,16 +326,28 @@ def from_dft_folder(
         pass
 
     cellfile = aseread(f"{dirpath}/new.xyz")
-    cell = cellfile.get_cell() # type: ignore
+    cell = cellfile.get_cell()  # type: ignore
     tempfile = aseread(f"{dirpath}/{output_file_name}")
-    tempfile.set_cell(cell) # type: ignore
-    tempfile.write(f"{save_to}/temp/{prefix}.json") # type: ignore
+    tempfile.set_cell(cell)  # type: ignore
+    tempfile.write(f"{save_to}/temp/{prefix}.json")  # type: ignore
 
     if test_mode:
         return 0
-    
+
     filepath = f"{save_to}/temp/{prefix}.json"
-    ase_json_handler(filepath, prefix, distance_margin, plot, save_to, filtered)
+    ase_json_handler(
+        filepath,
+        prefix,
+        creation_distance_margin,
+        plot,
+        save_to,
+        True,
+        rings_filter,
+        max_singlets,
+        use_parallel,
+        similarity_filter,
+        difference_distance,
+    )
 
     os.remove(f"{save_to}/temp/{prefix}.json")
     os.rmdir(f"{save_to}/temp")
@@ -335,12 +355,7 @@ def from_dft_folder(
 
 @app.command()
 def cull_results(
-    dirpath: Annotated[
-        str,
-        typer.Argument(
-            help="The input directory to find interface configurations for."
-        )
-    ],
+    dirpath: DIRPATH_STR,
     margin: Annotated[
         float,
         typer.Argument(
@@ -351,8 +366,8 @@ def cull_results(
         str,
         typer.Option(
             help="Identifier to indicate culled results. When empty, the margin is used."
-        )
-    ] = ""
+        ),
+    ] = "",
 ):
     """
     Remove structures which are translated and/or rotated duplicates of existing ones.
@@ -361,23 +376,32 @@ def cull_results(
         postfix = str(margin).replace(".", "_")
     cull(dirpath, margin, postfix)
 
-    
 
 def ase_json_handler(
     filepath: str,
     prefix: str,
-    distance_margin: float,
+    creation_distance_margin: float,
     plot: bool,
     save_to: str,
-    filtered: bool,
+    save_ase_json: bool,
+    rings_filter: bool,
+    max_singlets: int,
+    use_parallel: bool,
+    similarity_filter: bool,
+    difference_distance: float,
 ):
     if not (plot or save_to):
         print("NOTE: both plot and save_to are false!")
-    lattice = from_dft_json(filepath, distance_margin, False)
+    lattice = from_dft_json(filepath, creation_distance_margin, False)
 
     if plot:
         plt.plot(*lattice.points_to_plot(), "o", markersize=lattice_size)
-        plt.plot(*lattice.midpoints_to_plot(), "x", markersize=site_size, markeredgewidth=cross_thickness)
+        plt.plot(
+            *lattice.midpoints_to_plot(),
+            "x",
+            markersize=site_size,
+            markeredgewidth=cross_thickness,
+        )
         plt.plot(*lattice.tripoints_to_plot(), "s", markersize=site_size)
         plt.plot(*lattice.singlets_to_plot(), "^", markersize=site_size)
         plt.axis("equal")
@@ -385,13 +409,20 @@ def ase_json_handler(
         plt.ylabel("y (Å)")
         plt.show()
 
-    bit_lattice = lattice.get_intermediary()
-    if filtered:
+    bit_lattice = lattice.get_intermediary(
+        max_singlets=max_singlets,
+        difference_distance=difference_distance,
+        use_filter=similarity_filter,
+    )
+    if rings_filter:
         noloops = lattice.no_rings()
         bit_lattice = bit_lattice.filtered(noloops)
     print(bit_lattice)
 
-    solutions = bit_lattice.solve(True)
+    if use_parallel:
+        solutions = bit_lattice.solve_parallel(True)
+    else:
+        solutions = bit_lattice.solve(True)
 
     progress = tqdm(
         enumerate(solutions),
@@ -399,18 +430,28 @@ def ase_json_handler(
         bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}  ",
     )
 
-    for number, solution in progress:
-        solved_lattice = lattice.to_solved_lattice(solution)
-        if save_to:
-            solved_lattice.export(save_to, f"{prefix}_{number:>04}.json")
+    if save_to:
+        for number, solution in enumerate(solutions):
+            solved_lattice = lattice.to_solved_lattice(solution)
+            if save_ase_json:
+                solved_lattice.export_as_ase_json(f"{prefix}_{number:>04}.json", save_to)
+            else:
+                solved_lattice.export(save_to, f"{prefix}_{number:>04}.json")
 
-        if plot:
+    if plot:
+        for number, solution in progress:
+            solved_lattice = lattice.to_solved_lattice(solution)
             progress.set_description(desc=f"Solution {number}")
             plt.plot(*solved_lattice.points_to_plot(), "o", markersize=lattice_size)
             #     for num, point in enumerate(zip( *lattice.points_to_plot())):
             #         plt.annotate(str(num), (point[0], point[1]))
 
-            plt.plot(*solved_lattice.midpoints_to_plot(), "x", markersize=site_size, markeredgewidth=cross_thickness)
+            plt.plot(
+                *solved_lattice.midpoints_to_plot(),
+                "x",
+                markersize=site_size,
+                markeredgewidth=cross_thickness,
+            )
             plt.plot(*solved_lattice.tripoints_to_plot(), "s", markersize=site_size)
             plt.plot(*solved_lattice.singlets_to_plot(), "^", markersize=site_size)
             #     for num, point in enumerate(zip( *solved_lattice.oxygens_to_plot())):
