@@ -2,6 +2,7 @@ import typer
 from tqdm import tqdm
 from typing_extensions import Annotated
 import os
+from shutil import copy2
 
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
@@ -313,8 +314,8 @@ def from_dft_folder(
     Find next layer configurations directly from CP2K DFT results.
     """
     assert os.path.isdir(dirpath), "Filepath should be a directory."
-    dirpath.removesuffix("/")
-    save_to.removesuffix("/")
+    dirpath = dirpath.removesuffix("/")
+    save_to = save_to.removesuffix("/")
 
     try:
         os.mkdir(save_to)
@@ -351,6 +352,51 @@ def from_dft_folder(
 
     os.remove(f"{save_to}/temp/{prefix}.json")
     os.rmdir(f"{save_to}/temp")
+
+
+@app.command()
+def cp2kify(
+    dirpath: DIRPATH_STR,
+    save_to: Annotated[
+        str,
+        typer.Argument(help=SAVE_DESCRIPTION),
+    ],
+    in_path: Annotated[
+        str,
+        typer.Argument(help="The path to the `xxx.in` file needed for CP2K.")
+    ],
+    basis_path: Annotated[
+        str,
+        typer.Argument(help="The `BASIS` file needed for CP2K.")
+    ],
+    run_path: Annotated[
+        str,
+        typer.Argument(help="The bash script to run the job with sbatch.")
+    ],
+):
+    assert os.path.isdir(dirpath), "Filepath should be a directory."
+    dirpath = dirpath.removesuffix("/")
+    assert os.path.isfile(in_path), "xxx.in file not found."
+    in_path = in_path.removesuffix("/")
+    assert os.path.isfile(basis_path), "BASIS file not found."
+    basis_path = basis_path.removesuffix("/")
+    assert os.path.isfile(run_path), "Bash file not found."
+    os.mkdir(save_to)
+    save_to = save_to.removesuffix("/")
+
+    file_list = tqdm(
+        os.listdir(dirpath),
+        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}  ",
+    )
+    
+    for structure_file in file_list:
+        os.mkdir(f"{save_to}/{structure_file[:-5]}")
+        structure = aseread(f"{dirpath}/{structure_file}")
+        structure.write(f"{save_to}/{structure_file[:-5]}/new.xyz")  # type: ignore
+        copy2(in_path, f"{save_to}/{structure_file[:-5]}")
+        copy2(basis_path, f"{save_to}/{structure_file[:-5]}")
+        copy2(run_path, f"{save_to}/{structure_file[:-5]}")
+        
 
 
 @app.command()
