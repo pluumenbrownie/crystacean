@@ -480,8 +480,8 @@ impl BitArrayRepresentation {
                 )
             };
 
-            let structure_archive: scc::HashMap<(usize, usize, usize), Vec<Vec<f32>>> =
-                scc::HashMap::new();
+            // let structure_archive: scc::HashMap<(usize, usize, usize), Vec<Vec<f32>>> =
+            //     scc::HashMap::new();
 
             next_generation = iterator
                 .map(|vector| (vector, self.get_possibilities(vector)))

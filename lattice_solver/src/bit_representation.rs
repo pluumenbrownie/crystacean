@@ -14,7 +14,7 @@ pub struct BitArrayRepresentation {
     pub options: BitArraySettings,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BitArraySettings {
     pub max_singlets: usize,
     pub difference_distance: f32,
@@ -112,7 +112,7 @@ macro_rules! bit_array_settings {
     ( $latt:expr ) => {BitArraySettings::default(&$latt);};
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum BitArrayFilter {
     #[default]
     None,

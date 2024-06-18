@@ -4,7 +4,8 @@
     clippy::unreadable_literal,
     clippy::cast_possible_truncation,
     clippy::wildcard_imports,
-    clippy::must_use_candidate
+    clippy::must_use_candidate,
+    clippy::return_self_not_must_use
 )]
 // Optimisation Ideas:
 // - Turn current/next generation into hashsets to remove archive requirement
@@ -35,6 +36,7 @@ mod crown;
 use crown::*;
 
 pub mod site_filter;
+pub mod test_points;
 
 const BINSIZE: usize = 129;
 

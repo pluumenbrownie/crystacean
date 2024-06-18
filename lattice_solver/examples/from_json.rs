@@ -1,6 +1,4 @@
-#![allow(clippy::excessive_precision)]
-
-use lattice_solver::{bit_array_settings, BitArrayFilter, BitArraySettings, Lattice};
+use lattice_solver::{bit_array_settings, BitArraySettings, Lattice};
 
 fn main() {
     let lattice = Lattice::from_dft_json("../exports/16_base_2.json".into(), 1.1, true);
