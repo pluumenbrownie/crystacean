@@ -1,5 +1,5 @@
 from crystacean import Lattice, test_module
-from findthosepoints import full_lattice_from_basis_vectors
+from basis_vectors import full_lattice_from_basis_vectors
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from tqdm import tqdm

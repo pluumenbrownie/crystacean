@@ -1,6 +1,7 @@
+from basis_vectors import full_lattice_from_basis_vectors
 import spglib
 from classes import *
-from findthosepoints import find_ox_sites_bounds, find_ox_sites, full_lattice_from_basis_vectors
+from findthosepoints import find_ox_sites_bounds, find_ox_sites
 
 
 def show_symmetry(symmetry):

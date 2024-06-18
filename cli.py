@@ -9,7 +9,7 @@ from matplotlib import rcParams
 from ase.io import read as aseread
 
 from classes import from_file as from_file_classes
-from findthosepoints import full_lattice_from_basis_vectors
+from basis_vectors import full_lattice_from_basis_vectors
 from crystacean import Lattice, from_dft_json
 from cull_results import cull
 
@@ -374,6 +374,9 @@ def cp2kify(
         typer.Argument(help="The bash script to run the job with sbatch.")
     ],
 ):
+    """
+    Prepares a full folder of ASE json structures for batch processing with cp2k. 
+    """
     assert os.path.isdir(dirpath), "Filepath should be a directory."
     dirpath = dirpath.removesuffix("/")
     assert os.path.isfile(in_path), "xxx.in file not found."
