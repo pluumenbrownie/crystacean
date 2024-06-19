@@ -8,10 +8,12 @@ edition = "2021"
 [dependencies]
 dashmap = { version = "5.5.3", features = ["rayon"] }
 fixedbitset = "0.5.7"
+fmt-derive = "0.1.2"
 itertools = "0.13"
 json = "0.12.4"
 kdam = { version = "0.5.1", features = ["template", "spinner", "gradient", "rayon"] }
 kiddo = "4.0.0"
+ordered-float = "4.2.0"
 rayon = "1.10.0"
 scc = "2.1.1"
 termion = "4.0.0"
@@ -43,6 +45,9 @@ name = "macro_test"
 
 [[example]]
 name = "from_json"
+
+[[example]]
+name = "close_tree"
 
 [profile.bench]
 debug = true 

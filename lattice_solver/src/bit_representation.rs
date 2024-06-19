@@ -117,6 +117,7 @@ pub enum BitArrayFilter {
     #[default]
     None,
     Similarity,
+    New,
 }
 
 #[derive(Debug, PartialEq, Eq, Default)]

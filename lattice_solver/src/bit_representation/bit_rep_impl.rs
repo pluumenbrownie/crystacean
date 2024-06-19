@@ -1,9 +1,11 @@
+use close_vector_tree::CloseVectorTreeMap;
 use fixedbitset::FixedBitSet;
-use itertools::Itertools;
+use itertools::{zip_eq, Itertools};
 use kdam::{par_tqdm, tqdm, Colour, Spinner};
+use ordered_float::NotNan;
 use scc::Bag;
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     io::{stderr, IsTerminal},
     mem,
 };
@@ -360,6 +362,8 @@ impl BitArrayRepresentation {
             };
 
             let mut structure_map = HashMap::new();
+            let mut new_structure_map =
+                CloseVectorTreeMap::new(self.options.difference_distance.try_into().unwrap());
 
             for candidate in iterator {
                 if let Ok(possibilities) = self.get_possibilities(candidate) {
@@ -372,7 +376,11 @@ impl BitArrayRepresentation {
                         let mut new_candidate = candidate.clone();
                         new_candidate.set(fillable_site, true);
 
-                        if self.solving_filter(&new_candidate, &mut structure_map) {
+                        if self.solving_filter(
+                            &new_candidate,
+                            &mut structure_map,
+                            &mut new_structure_map,
+                        ) {
                             next_generation.push(new_candidate);
                         }
                     }
@@ -386,19 +394,21 @@ impl BitArrayRepresentation {
                 solution.inflate(filter);
             }
         }
-        println!();
-        println!();
+        // println!();
+        // println!();
         solutions
     }
 
     fn solving_filter(
         &self,
         new_candidate: &FixedBitSet,
-        structure_map: &mut HashMap<(usize, usize, usize), Vec<Vec<f32>>>
+        structure_map: &mut HashMap<(usize, usize, usize), Vec<Vec<f32>>>,
+        new_structure_map: &mut CloseVectorTreeMap,
     ) -> bool {
         match self.options.solve_filter {
             BitArrayFilter::None => true,
             BitArrayFilter::Similarity => self.similarity_filter(new_candidate, structure_map),
+            BitArrayFilter::New => self.new_similarity_filter(new_candidate, new_structure_map),
         }
     }
 
@@ -432,6 +442,67 @@ impl BitArrayRepresentation {
             structure_vec.push(new_structure);
         }
         unique
+    }
+
+    pub(crate) fn new_similarity_filter(
+        &self,
+        new_candidate: &FixedBitSet,
+        structure_map: &mut CloseVectorTreeMap,
+    ) -> bool {
+        // let tolerance = self.options.difference_distance;
+        // let type_distribution = (
+        //     new_candidate.union_count(&self.tripoint_mask),
+        //     new_candidate.union_count(&self.midpoint_mask),
+        //     new_candidate.union_count(&self.singlet_mask),
+        // );
+
+        // let vec_of_trees: &Vec<BTreeMap<NotNan<f32>, Vec<usize>>> =
+        //     structure_map.entry(type_distribution).or_default();
+
+        // let new_structure = self.create_diff_vector(new_candidate);
+
+        structure_map.insert(new_candidate, self)
+
+        // let unique = if new_structure.len() == vec_of_trees.len() {
+        //     new_structure
+        //         .iter()
+        //         .zip_eq(vec_of_trees)
+        //         .map(|(value, tree)| {
+        //             tree.range(value - tolerance..=value + tolerance)
+        //                 .flat_map(|key| key.1)
+        //                 .map(std::borrow::ToOwned::to_owned)
+        //                 .collect()
+        //         })
+        //         .reduce(|acc: HashSet<usize>, h| acc.intersection(&h).copied().collect())
+        //         .is_none()
+        // } else {
+        //     true
+        // };
+
+        // if unique {
+        //     let vec_of_trees = structure_map.get_mut(&type_distribution).unwrap();
+        //     if new_structure.len() == vec_of_trees.len() {
+        //         for (value, tree) in zip_eq(new_structure.into_iter(), vec_of_trees.iter_mut()) {
+        //             let new_id = tree.len();
+        //             tree.entry(value).or_default().push(new_id);
+        //         }
+        //     } else {
+        //         for value in new_structure {
+        //             vec_of_trees.push(BTreeMap::new());
+        //             vec_of_trees.last_mut().unwrap().insert(value, vec![0]);
+        //         }
+        //     }
+        // }
+        // unique
+    }
+
+    pub fn create_diff_vector(&self, new_candidate: &FixedBitSet) -> Vec<NotNan<f32>> {
+        let mut new_structure = vec![];
+        for (one, two) in new_candidate.ones().combinations(2).map(|v| (v[0], v[1])) {
+            new_structure.push(NotNan::new(self.distances_matrix[one][two]).unwrap());
+        }
+        new_structure.sort_unstable();
+        new_structure
     }
 
     /// Starts the solving process.

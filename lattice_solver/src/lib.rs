@@ -35,6 +35,9 @@ use inserters::*;
 mod crown;
 use crown::*;
 
+pub mod close_vector_tree;
+// use close_vector_tree::*;
+
 pub mod site_filter;
 pub mod test_points;
 

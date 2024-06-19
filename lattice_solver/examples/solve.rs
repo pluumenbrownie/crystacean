@@ -1,20 +1,21 @@
 use lattice_solver::{
-    bit_array_settings, test_points::lattice_points, BitArraySettings, Lattice
+    bit_array_settings, test_points::lattice_points, BitArrayFilter, BitArraySettings, Lattice,
 };
 
 fn main() {
-    
     let lattice = Lattice::python_new(lattice_points(), 1.1, true);
 
     let options = bit_array_settings!(
-        lattice
+        lattice,
+        solve_filter = BitArrayFilter::New,
+        difference_distance = 0.1
     );
     let bit_lattice = lattice.get_intermediary(options);
 
     println!("{}", bit_lattice.__str__());
 
     let solutions = bit_lattice.solve(true, false);
-    println!("Solutions found: {}", solutions.len());
+    println!("\n\nSolutions found: {}", solutions.len());
 
     // let solutions_filtered = bit_lattice.solve_filtered(true, false);
     // println!("Solutions found: {}", solutions.len());
