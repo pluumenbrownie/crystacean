@@ -46,3 +46,23 @@ def full_lattice_from_basis_vectors(size: int = 1) -> list[tuple[list[float], li
                 bottom_points[0.0][1].append(corner_point)
 
     return points
+
+if __name__ == '__main__':
+    points = full_lattice_from_basis_vectors(3)
+    print("vec![")
+    for point_tuples in points:
+        print(f"(")
+        for point in point_tuples:
+            print("vec![", end="")
+            for number in point:
+                if isinstance(number, list):
+                    print("vec![", end="")
+                    for n in number:
+                        print(n, end=", ")
+                    print("]", end=", ")
+                else:
+                    print(number, end=", ")
+            print("], ", end="")
+        print("\n), ")
+    print("]")
+    # print(points)
