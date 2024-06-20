@@ -1,22 +1,50 @@
 use lattice_solver::{
-    bit_array_settings, test_points::lattice_points, BitArrayFilter, BitArraySettings, Lattice,
+    bit_array_settings, test_points::{huge_points, lattice_points}, BitArrayFilter, BitArraySettings, Lattice,
 };
 
 fn main() {
     let lattice = Lattice::python_new(lattice_points(), 1.1, true);
+    let tolerance = 0.001f32;
 
-    let options = bit_array_settings!(
+    let trees_options = bit_array_settings!(
         lattice,
-        solve_filter = BitArrayFilter::New,
-        difference_distance = 0.1
+        solve_filter = BitArrayFilter::SimTrees,
+        difference_distance = tolerance
     );
-    let bit_lattice = lattice.get_intermediary(options);
+    let trees_bit_lattice = lattice.get_intermediary(trees_options);
 
-    println!("{}", bit_lattice.__str__());
+    // println!("{}", bit_lattice.__str__());
 
-    let solutions = bit_lattice.solve(true, false);
-    println!("\n\nSolutions found: {}", solutions.len());
+    let trees_solutions = trees_bit_lattice.solve(true, false);
+    println!("\n\nSolutions found: {}", trees_solutions.len());
 
+    // let old_options = bit_array_settings!(
+    //     lattice,
+    //     solve_filter = BitArrayFilter::Similarity,
+    //     difference_distance = tolerance
+    // );
+    // let old_bit_lattice = lattice.get_intermediary(old_options);
+
+    // // println!("{}", bit_lattice.__str__());
+
+    // let old_solutions = old_bit_lattice.solve(true, false);
+    // println!("\n\nSolutions found: {}", old_solutions.len());
+
+
+    // let none_options = bit_array_settings!(
+    //     lattice,
+    //     solve_filter = BitArrayFilter::None,
+    //     difference_distance = tolerance
+    // );
+    // let none_bit_lattice = lattice.get_intermediary(none_options);
+
+    // // println!("{}", bit_lattice.__str__());
+
+    // let none_solutions = none_bit_lattice.solve(true, false);
+    // println!("\n\nSolutions found: {}", none_solutions.len());
+
+    // dbg!(trees_solutions == old_solutions);
+    // dbg!(trees_solutions == none_solutions);
     // let solutions_filtered = bit_lattice.solve_filtered(true, false);
     // println!("Solutions found: {}", solutions.len());
     // for (number, solution) in solutions.iter().enumerate() {

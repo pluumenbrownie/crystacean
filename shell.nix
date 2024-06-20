@@ -53,5 +53,7 @@ in
       python-pkgs.ase
     ])).override(args: { ignoreCollisions = true; })) # https://github.com/DavHau/mach-nix/issues/24
     maturin
+    linuxKernel.packages.linux_6_6.perf
+    cargo-flamegraph
   ];
 }

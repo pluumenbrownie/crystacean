@@ -1,9 +1,9 @@
-use std::{collections::{BTreeMap, HashMap, HashSet}, rc::Rc};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use fixedbitset::FixedBitSet;
+use fmt_derive;
 use itertools::Itertools;
 use ordered_float::NotNan;
-use fmt_derive;
 
 use crate::BitArrayRepresentation;
 
@@ -24,7 +24,7 @@ impl CloseVectorTree {
     pub fn length(length: usize, tolerance: NotNan<f32>) -> Self {
         let mut vector = vec![];
         for _ in 0..length {
-            vector.push(Default::default());
+            vector.push(BTreeMap::default());
         }
         Self {
             vector,
@@ -36,7 +36,7 @@ impl CloseVectorTree {
     pub fn check(&self, vector: &Vec<NotNan<f32>>) -> bool {
         let mut per_value = vec![];
         for (value, tree) in vector.iter().zip_eq(&self.vector) {
-            let in_range: HashSet<usize> = tree
+            let in_range: Vec<usize> = tree
                 .range(value - self.tolerance..=value + self.tolerance)
                 .flat_map(|(_, v)| v)
                 .dedup()
@@ -47,7 +47,12 @@ impl CloseVectorTree {
         }
         let alike_vectors = per_value
             .into_iter()
-            .reduce(|acc, h| acc.intersection(&h).copied().collect())
+            // .reduce(|acc, h| acc.intersection(&h).copied().collect())
+            .reduce(|acc, h| {
+                acc.into_iter()
+                    .filter(|a| h.contains(a))
+                    .collect_vec()
+            })
             .unwrap_or_default();
         // println!("{alike_vectors:?}");
         alike_vectors.is_empty()
@@ -82,13 +87,11 @@ impl CloseVectorTreeMap {
     //     let mut close_vector_tree = self.map.entry();
     //     todo!()
     // }
-    pub fn new(
-        tolerance: NotNan<f32>
-    ) -> Self {
+    pub fn new(tolerance: NotNan<f32>) -> Self {
         Self {
             map: HashMap::default(),
             tolerance,
-        } 
+        }
     }
 
     pub fn get(&mut self, point_type_count: PointTypeCount, length: usize) -> &CloseVectorTree {
