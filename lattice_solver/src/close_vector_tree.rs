@@ -1,4 +1,6 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+#![allow(clippy::module_name_repetitions)]
+
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use fixedbitset::FixedBitSet;
 use fmt_derive;
@@ -33,34 +35,69 @@ impl CloseVectorTree {
         }
     }
 
-    pub fn check(&self, vector: &Vec<NotNan<f32>>) -> bool {
-        let mut per_value = vec![];
-        for (value, tree) in vector.iter().zip_eq(&self.vector) {
-            let in_range: Vec<usize> = tree
-                .range(value - self.tolerance..=value + self.tolerance)
-                .flat_map(|(_, v)| v)
-                .dedup()
-                .copied()
-                .collect();
-            // println!("{in_range:?}");
-            per_value.push(in_range);
-        }
-        let alike_vectors = per_value
-            .into_iter()
-            // .reduce(|acc, h| acc.intersection(&h).copied().collect())
-            .reduce(|acc, h| {
-                acc.into_iter()
-                    .filter(|a| h.contains(a))
-                    .collect_vec()
+    pub fn check(&self, vector: &[NotNan<f32>]) -> bool {
+        // let mut per_value = vec![];
+        // for (value, tree) in vector.iter().zip_eq(&self.vector) {
+        //     let in_range: Vec<usize> = tree
+        //         .range(value - self.tolerance..=value + self.tolerance)
+        //         .flat_map(|(_, v)| v)
+        //         .dedup()
+        //         .copied()
+        //         .collect();
+        //     // println!("{in_range:?}");
+        //     per_value.push(in_range);
+        // }
+        vector
+            .iter()
+            .zip_eq(&self.vector)
+            .fold(None, |acc: Option<BTreeSet<_>>, (value, tree)| {
+                let h = tree
+                    .range(value - self.tolerance..=value + self.tolerance)
+                    .flat_map(|(_, v)| v)
+                    .dedup();
+                Some( match acc {
+                    None => h.collect::<BTreeSet<_>>(),
+                    Some(acc) => h.into_iter().filter(|v| acc.contains(v)).collect(),
+                } )
             })
-            .unwrap_or_default();
-        // println!("{alike_vectors:?}");
-        alike_vectors.is_empty()
+            // .map( |(value, tree)| {
+            //     tree.range(value - self.tolerance..=value + self.tolerance)
+            //     .flat_map(|(_, v)| v)
+            //     .dedup()
+            //     .copied()
+            //     .collect_vec()
+            // })
+            // .fold(None, |acc: Option<BTreeSet<_>>, h| {
+            //     match acc {
+            //         None => {Some(BTreeSet::from_iter(h))},
+            //         Some(acc) => {
+            //             Some(h.into_iter()
+            //                 .filter(|v| acc.contains(v))
+            //                 .collect())
+            //         }
+            //     }
+            // })
+            // .reduce(|acc, h| {
+            //     acc.into_iter()
+            //         .filter(|a| h.contains(a))
+            //         .collect()
+            // })
+            .unwrap_or_default()
+            .is_empty()
+        // per_value
+        //     .into_iter()
+        //     .reduce(|acc, h| {
+        //         acc.into_iter()
+        //             .filter(|a| h.contains(a))
+        //             .collect_vec()
+        //     })
+        //     .unwrap_or_default()
+        //     .is_empty()
     }
 
     fn insert_blind(&mut self, vector: Vec<NotNan<f32>>) {
         let id = self.pop_size();
-        for (&key, tree) in vector.iter().zip_eq(&mut self.vector) {
+        for (key, tree) in vector.into_iter().zip_eq(&mut self.vector) {
             tree.entry(key).or_insert(vec![]).push(id);
         }
     }

@@ -3,13 +3,14 @@ use lattice_solver::{
 };
 
 fn main() {
-    let lattice = Lattice::python_new(lattice_points(), 1.1, true);
-    let tolerance = 0.001f32;
+    let lattice = Lattice::python_new(huge_points(), 1.1, true);
+    let tolerance = 0.9f32;
 
     let trees_options = bit_array_settings!(
         lattice,
-        solve_filter = BitArrayFilter::SimTrees,
-        difference_distance = tolerance
+        solve_filter = BitArrayFilter::Similarity,
+        difference_distance = tolerance,
+        max_singlets = 0
     );
     let trees_bit_lattice = lattice.get_intermediary(trees_options);
 

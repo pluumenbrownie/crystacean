@@ -1,11 +1,11 @@
 use close_vector_tree::CloseVectorTreeMap;
 use fixedbitset::FixedBitSet;
-use itertools::{zip_eq, Itertools};
+use itertools::Itertools;
 use kdam::{par_tqdm, tqdm, Colour, Spinner};
 use ordered_float::NotNan;
 use scc::Bag;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::HashMap,
     io::{stderr, IsTerminal},
     mem,
 };
@@ -408,7 +408,7 @@ impl BitArrayRepresentation {
         match self.options.solve_filter {
             BitArrayFilter::None => true,
             BitArrayFilter::Similarity => self.similarity_filter(new_candidate, structure_map),
-            BitArrayFilter::SimTrees => self.new_similarity_filter(new_candidate, new_structure_map),
+            BitArrayFilter::SimTrees => self.simtree_filter(new_candidate, new_structure_map),
         }
     }
 
@@ -444,7 +444,7 @@ impl BitArrayRepresentation {
         unique
     }
 
-    pub(crate) fn new_similarity_filter(
+    pub(crate) fn simtree_filter(
         &self,
         new_candidate: &FixedBitSet,
         structure_map: &mut CloseVectorTreeMap,
