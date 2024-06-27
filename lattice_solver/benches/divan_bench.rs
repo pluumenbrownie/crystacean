@@ -1,5 +1,5 @@
 use lattice_solver::{
-    bit_array_settings, test_points::{self, huge_points, lattice_points}, BitArrayFilter, BitArraySettings, Lattice
+    bit_array_settings, test_points::{huge_points, lattice_points}, BitArrayFilter, BitArraySettings, Lattice, BitArraySolution
 };
 use termion::{clear, cursor};
 
@@ -18,7 +18,7 @@ use termion::{clear, cursor};
 // }
 
 #[divan::bench(max_time = 120, args = [BitArrayFilter::Similarity, BitArrayFilter::None])]
-fn huge_run(filter: BitArrayFilter) -> Vec<lattice_solver::BitArraySolution> {
+fn huge_run(filter: BitArrayFilter) -> Vec<BitArraySolution> {
     let lattice_points = lattice_points();
 
     let lattice = Lattice::python_new(lattice_points, 1.1, true);

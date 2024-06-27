@@ -18,8 +18,10 @@ import alive_progress, scipy
 
 
 rcParams.update({"font.size": 11})
-lattice_size = 10
-site_size = 16
+# lattice_size = 10
+# site_size = 16
+lattice_size = 6
+site_size = 8
 cross_thickness = 4
 
 app = typer.Typer()
@@ -303,12 +305,15 @@ def from_dft_folder(
     ] = "SiC-pos-1.xyz",
     test_mode: Annotated[
         bool,
-        typer.Option(help="Stop after creating tempfile."),
+        typer.Option("--test-mode", help="Stop after creating tempfile."),
     ] = False,
     max_singlets: SINGLET_INT = 2,
     use_parallel: PARALLEL_BOOL = False,
     similarity_filter: SIMILARIRY_BOOL = False,
     difference_distance: DD_FLOAT = 0.05,
+    do_cp2kify: Annotated[
+        bool, typer.Option("--cp2kify", "-y", help="Create a ready-to-run CP2K folder with all the files needed for a DFT run.")
+    ] = False,
 ):
     """
     Find next layer configurations directly from CP2K DFT results.
@@ -326,16 +331,17 @@ def from_dft_folder(
     except FileExistsError:
         pass
 
+    filepath = f"{save_to}/temp/{prefix}.json"
+
     cellfile = aseread(f"{dirpath}/new.xyz")
     cell = cellfile.get_cell()  # type: ignore
     tempfile = aseread(f"{dirpath}/{output_file_name}")
     tempfile.set_cell(cell)  # type: ignore
-    tempfile.write(f"{save_to}/temp/{prefix}.json")  # type: ignore
+    tempfile.write(filepath)  # type: ignore
 
     if test_mode:
         return 0
 
-    filepath = f"{save_to}/temp/{prefix}.json"
     ase_json_handler(
         filepath,
         prefix,
@@ -352,6 +358,8 @@ def from_dft_folder(
 
     os.remove(f"{save_to}/temp/{prefix}.json")
     os.rmdir(f"{save_to}/temp")
+    # if do_cp2kify:
+    #     cp2kify(save_to, save_to)
 
 
 @app.command()
@@ -398,8 +406,7 @@ def cp2kify(
         structure.write(f"{save_to}/{structure_file[:-5]}/new.xyz")  # type: ignore
         copy2(in_path, f"{save_to}/{structure_file[:-5]}")
         copy2(basis_path, f"{save_to}/{structure_file[:-5]}")
-        copy2(run_path, f"{save_to}/{structure_file[:-5]}")
-        
+        copy2(run_path, f"{save_to}/{structure_file[:-5]}")    
 
 
 @app.command()
@@ -457,6 +464,19 @@ def ase_json_handler(
         plt.xlabel("x (Å)")
         plt.ylabel("y (Å)")
         plt.show()
+        # plt.plot(*lattice.points_to_plot(), "o", markersize=lattice_size)
+        # plt.plot(
+        #     *lattice.midpoints_to_plot(),
+        #     "x",
+        #     markersize=site_size,
+        #     markeredgewidth=cross_thickness,
+        # )
+        # plt.plot(*lattice.tripoints_to_plot(), "s", markersize=site_size)
+        # plt.axis("equal")
+        # for num, x, y in lattice.no_rings_plot():
+        #     plt.annotate(str(num), (x, y))
+        # plt.show()
+
 
     bit_lattice = lattice.get_intermediary(
         max_singlets=max_singlets,

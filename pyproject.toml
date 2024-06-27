@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "crystacean"
+version = "1.0.0"
+description = "A utility to generate amourphous atomic structures."
+authors = ["Pluumenbrownie <git.wessel@beumertjes.nl>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

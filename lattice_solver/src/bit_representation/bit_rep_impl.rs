@@ -388,6 +388,10 @@ impl BitArrayRepresentation {
             }
 
             mem::swap(&mut current_generation, &mut next_generation);
+
+            if solutions.is_empty() && current_generation.is_empty() {
+                break;
+            }
         }
         if let Some(filter) = &self.filter {
             for solution in &mut solutions {

@@ -228,7 +228,7 @@ impl Lattice {
         let mut file = File::open(filename).expect("Opening file failed.");
         file.read_to_string(&mut buffer)
             .expect("Reading file failed.");
-        let parsed = json::parse(&buffer).expect("Parsing file failed/");
+        let parsed = json::parse(&buffer).expect("Parsing file failed.");
 
         let last_id = &parsed["ids"][parsed["ids"].len() - 1].to_string();
 
@@ -350,17 +350,14 @@ impl Lattice {
         file.write_all(export_data.pretty(4).as_bytes()).unwrap();
     }
 
-    /// Returns a numbered list of ring locations.
-    ///
-    /// # Panics
-    /// Can panic when `Lattice` was not created from file.
-    #[must_use]
-    pub fn no_rings_plot(&self) -> Vec<(usize, f32, f32)> {
+    /// Helper method for the `no_rings` methods.
+    fn no_rings_detector(&self) -> (Vec<[f32; 3]>, Vec<usize>) {
         let parsed = self.source_file.as_ref().unwrap();
 
         let last_id = &parsed["ids"][parsed["ids"].len() - 1].to_string();
 
         let numbers = &parsed[last_id]["positions"]["__ndarray__"][2];
+        let elements = &parsed[last_id]["numbers"]["__ndarray__"][2];
         let atoms = numbers
             .members()
             .map(|j| j.as_f32().unwrap())
@@ -371,14 +368,13 @@ impl Lattice {
 
         let top_silicon_locations = atoms
             .iter()
-            .sorted_by(|&a, &b| a[2].total_cmp(&b[2]))
-            .filter(|&s| (s[2] > 8.4) & (s[2] < 10.0))
-            .map(|v| [v[0], v[1], v[2]])
+            .zip_eq(elements.members())
+            .sorted_by(|&a, &b| a.0[2].total_cmp(&b.0[2]))
+            .filter(|(s, e)| e.as_i64().unwrap() == 14 && (s[2] < 10.0))
+            .map(|(v, _)| [v[0], v[1], v[2]])
             .collect_vec();
 
         let points_vector = self.points.iter().map(|p| [p.x, p.y, p.z]).collect_vec();
-        println!("{points_vector:?}");
-        println!("length: {}", points_vector.len());
         let points_tree: KdTree<_, u64, 3, BINSIZE, u32> = (&points_vector).into();
 
         let point_group_vector = {
@@ -386,14 +382,26 @@ impl Lattice {
 
             for (number, atom) in top_silicon_locations.iter().enumerate() {
                 let close_points = points_tree.within::<SquaredEuclidean>(atom, 1.7f32.powi(2));
-                println!("{atom:?} --- {close_points:?}");
+                // println!("{number}:{atom:?} --- {close_points:?}");
                 for point in close_points {
                     point_group_vector[point.item as usize] = number;
                 }
             }
             point_group_vector
         };
-        println!("{point_group_vector:?}");
+        (points_vector, point_group_vector)
+    }
+
+    /// Returns a numbered list of ring locations.
+    ///
+    /// # Panics
+    /// Can panic when `Lattice` was not created from file.
+    #[must_use]
+    pub fn no_rings_plot(&self) -> Vec<(usize, f32, f32)> {
+        let (points_vector, point_group_vector) = self.no_rings_detector();
+        println!("points_vector = {points_vector:?}");
+        println!("length: {}", points_vector.len());
+        println!("point_group_vector = {point_group_vector:?}");
 
         izip!(
             point_group_vector,
@@ -403,50 +411,13 @@ impl Lattice {
         .collect_vec()
     }
 
-    /// Create a `SiteFilter` for .
+    /// Create a `SiteFilter` to prevent small rings from forming in the material.
     ///
     /// # Panics
     /// Can panic when `Lattice` was not created from file.
     #[must_use]
     pub fn no_rings(&self) -> site_filter::SiteFilter {
-        let parsed = self.source_file.as_ref().unwrap();
-
-        let last_id = &parsed["ids"][parsed["ids"].len() - 1].to_string();
-
-        let numbers = &parsed[last_id]["positions"]["__ndarray__"][2];
-        let atoms = numbers
-            .members()
-            .map(|j| j.as_f32().unwrap())
-            .collect_vec()
-            .chunks_exact(3)
-            .map(<[f32]>::to_vec)
-            .collect_vec();
-
-        let top_silicon_locations = atoms
-            .iter()
-            .sorted_by(|&a, &b| a[2].total_cmp(&b[2]))
-            .filter(|&s| (s[2] > 8.4) & (s[2] < 10.0))
-            .map(|v| [v[0], v[1], v[2]])
-            .collect_vec();
-
-        let points_vector = self.points.iter().map(|p| [p.x, p.y, p.z]).collect_vec();
-        // println!("{points_vector:?}");
-        // println!("length: {}", points_vector.len());
-        let points_tree: KdTree<_, u64, 3, 128, u32> = (&points_vector).into();
-
-        let point_group_vector = {
-            let mut point_group_vector = vec![1000; self.points.len()];
-
-            for (number, atom) in top_silicon_locations.iter().enumerate() {
-                let close_points = points_tree.within::<SquaredEuclidean>(atom, 1.7f32.powi(2));
-                // println!("{:?} --- {:?}", atom, close_points);
-                for point in close_points {
-                    point_group_vector[point.item as usize] = number;
-                }
-            }
-            point_group_vector
-        };
-        // println!("{point_group_vector:?}");
+        let (_, point_group_vector) = self.no_rings_detector();
 
         let mut disabled_oxygens = vec![];
 
