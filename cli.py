@@ -1,3 +1,4 @@
+from typing import Optional
 import typer
 from tqdm import tqdm
 from typing_extensions import Annotated
@@ -37,7 +38,10 @@ PLOT_BOOL = Annotated[
 ]
 DIRPATH_STR = Annotated[
     str,
-    typer.Argument(help="The input directory to find interface configurations for."),
+    typer.Argument(
+        help="The input directory to find interface configurations for.",
+        show_default=False,
+    ),
 ]
 CDM_FLOAT = Annotated[
     float,
@@ -251,10 +255,17 @@ def from_size(
 @app.command()
 def from_file(
     filepath: Annotated[
-        str, typer.Argument(help="The input file to find interface configurations for.")
+        str,
+        typer.Argument(
+            help="The input file to find interface configurations for.",
+            show_default=False,
+        ),
     ],
     prefix: Annotated[
-        str, typer.Argument(help="Identifying prefix to use when saving")
+        str,
+        typer.Argument(
+            help="Identifying prefix to use when saving", show_default=False
+        ),
     ],
     creation_distance_margin: CDM_FLOAT = 3.5,
     plot: PLOT_BOOL = False,
@@ -291,11 +302,11 @@ def from_dft_folder(
     dirpath: DIRPATH_STR,
     save_to: Annotated[
         str,
-        typer.Argument(help=SAVE_DESCRIPTION),
+        typer.Argument(help=SAVE_DESCRIPTION, show_default=False),
     ],
     prefix: Annotated[
-        str, typer.Argument(help="Identifying prefix to use when saving")
-    ],
+        Optional[str], typer.Argument(help="Identifying prefix to use when saving", show_default="$dirpath lowest folder")
+    ] = None,
     creation_distance_margin: CDM_FLOAT = 3.5,
     plot: PLOT_BOOL = False,
     rings_filter: RINGS_BOOL = True,
@@ -311,9 +322,6 @@ def from_dft_folder(
     use_parallel: PARALLEL_BOOL = False,
     similarity_filter: SIMILARIRY_BOOL = False,
     difference_distance: DD_FLOAT = 0.05,
-    do_cp2kify: Annotated[
-        bool, typer.Option("--cp2kify", "-y", help="Create a ready-to-run CP2K folder with all the files needed for a DFT run.")
-    ] = False,
 ):
     """
     Find next layer configurations directly from CP2K DFT results.
@@ -321,6 +329,8 @@ def from_dft_folder(
     assert os.path.isdir(dirpath), "Filepath should be a directory."
     dirpath = dirpath.removesuffix("/")
     save_to = save_to.removesuffix("/")
+    if not prefix:
+        prefix = dirpath.rsplit("/")[-1]
 
     try:
         os.mkdir(save_to)
@@ -367,23 +377,33 @@ def cp2kify(
     dirpath: DIRPATH_STR,
     save_to: Annotated[
         str,
-        typer.Argument(help=SAVE_DESCRIPTION),
+        typer.Argument(help=SAVE_DESCRIPTION, show_default=False),
     ],
     in_path: Annotated[
         str,
-        typer.Argument(help="The path to the `xxx.in` file needed for CP2K.")
+        typer.Argument(
+            help="The path to the `xxx.in` file needed for CP2K.", show_default=False
+        ),
     ],
     basis_path: Annotated[
         str,
-        typer.Argument(help="The `BASIS` file needed for CP2K.")
+        typer.Argument(help="The `BASIS` file needed for CP2K.", show_default=False),
     ],
     run_path: Annotated[
         str,
-        typer.Argument(help="The bash script to run the job with sbatch.")
+        typer.Argument(
+            help="The bash script to run the job with sbatch.", show_default=False
+        ),
     ],
+    destructive: Annotated[
+        bool,
+        typer.Option(
+            "--destructive", help="Remove given json files when folder has been created."
+        )
+    ] = False,
 ):
     """
-    Prepares a full folder of ASE json structures for batch processing with cp2k. 
+    Prepares a full folder of ASE json structures for batch processing with cp2k.
     """
     assert os.path.isdir(dirpath), "Filepath should be a directory."
     dirpath = dirpath.removesuffix("/")
@@ -392,21 +412,26 @@ def cp2kify(
     assert os.path.isfile(basis_path), "BASIS file not found."
     basis_path = basis_path.removesuffix("/")
     assert os.path.isfile(run_path), "Bash file not found."
-    os.mkdir(save_to)
+    try:
+         os.mkdir(save_to)
+    except FileExistsError:
+        pass
     save_to = save_to.removesuffix("/")
 
     file_list = tqdm(
         os.listdir(dirpath),
         bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}  ",
     )
-    
+
     for structure_file in file_list:
         os.mkdir(f"{save_to}/{structure_file[:-5]}")
         structure = aseread(f"{dirpath}/{structure_file}")
         structure.write(f"{save_to}/{structure_file[:-5]}/new.xyz")  # type: ignore
         copy2(in_path, f"{save_to}/{structure_file[:-5]}")
         copy2(basis_path, f"{save_to}/{structure_file[:-5]}")
-        copy2(run_path, f"{save_to}/{structure_file[:-5]}")    
+        copy2(run_path, f"{save_to}/{structure_file[:-5]}")
+        if destructive:
+            os.remove(f"{dirpath}/{structure_file}")
 
 
 @app.command()
@@ -415,7 +440,8 @@ def cull_results(
     margin: Annotated[
         float,
         typer.Argument(
-            help="Minimal deviation needed between structures to be designated as 'unique'."
+            help="Minimal deviation needed between structures to be designated as 'unique'.",
+            show_default=False,
         ),
     ],
     postfix: Annotated[
@@ -477,7 +503,6 @@ def ase_json_handler(
         #     plt.annotate(str(num), (x, y))
         # plt.show()
 
-
     bit_lattice = lattice.get_intermediary(
         max_singlets=max_singlets,
         difference_distance=difference_distance,
@@ -503,7 +528,9 @@ def ase_json_handler(
         for number, solution in enumerate(solutions):
             solved_lattice = lattice.to_solved_lattice(solution)
             if save_ase_json:
-                solved_lattice.export_as_ase_json(f"{prefix}_{number:>04}.json", save_to)
+                solved_lattice.export_as_ase_json(
+                    f"{prefix}_{number:>04}.json", save_to
+                )
             else:
                 solved_lattice.export(save_to, f"{prefix}_{number:>04}.json")
 
