@@ -377,7 +377,7 @@ def cp2kify(
     dirpath: DIRPATH_STR,
     save_to: Annotated[
         str,
-        typer.Argument(help=SAVE_DESCRIPTION, show_default=False),
+        typer.Argument(help="Save found interface configurations to given directory.", show_default=False),
     ],
     in_path: Annotated[
         str,
@@ -511,7 +511,7 @@ def ase_json_handler(
     if rings_filter:
         noloops = lattice.no_rings()
         bit_lattice = bit_lattice.filtered(noloops)
-    print(bit_lattice)
+    # print(bit_lattice)
 
     if use_parallel:
         solutions = bit_lattice.solve_parallel(True)
