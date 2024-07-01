@@ -183,7 +183,7 @@ impl BitArrayRepresentation {
              (find_all & (next_generation.len() > 0)) 
         {
             depth += 1;
-            println!("Current depth: {depth}");
+            // println!("Current depth: {depth}");
 
             next_generation.clear();
 
