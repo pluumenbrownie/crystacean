@@ -424,7 +424,7 @@ def cp2kify(
     )
 
     for structure_file in file_list:
-        if not structure_file[-5:-1] == ".json":
+        if not structure_file[-5:] == ".json":
             structure_file += ".json"
         os.mkdir(f"{save_to}/{structure_file[:-5]}")
         structure = aseread(f"{dirpath}/{structure_file}")
