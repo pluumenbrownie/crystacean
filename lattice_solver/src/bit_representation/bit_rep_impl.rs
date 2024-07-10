@@ -356,8 +356,7 @@ impl BitArrayRepresentation {
                         60.0,
                         1.0,
                     ),
-                    leave = true,
-                    position = 1
+                    leave = true
                 )
             };
 
@@ -413,6 +412,8 @@ impl BitArrayRepresentation {
             BitArrayFilter::None => true,
             BitArrayFilter::Similarity => self.similarity_filter(new_candidate, structure_map),
             BitArrayFilter::SimTrees => self.simtree_filter(new_candidate, new_structure_map),
+            BitArrayFilter::Flipped => self.flipped_filter(new_candidate, structure_map),
+            BitArrayFilter::InsideOut => self.insideout_filter(new_candidate, structure_map),
         }
     }
 
@@ -448,6 +449,78 @@ impl BitArrayRepresentation {
         unique
     }
 
+    pub(crate) fn flipped_filter(
+        &self,
+        new_candidate: &FixedBitSet,
+        structure_map: &mut HashMap<(usize, usize, usize), Vec<Vec<f32>>>,
+    ) -> bool {
+        let type_distribution = (
+            new_candidate.union_count(&self.tripoint_mask),
+            new_candidate.union_count(&self.midpoint_mask),
+            new_candidate.union_count(&self.singlet_mask),
+        );
+
+        let structure_vec: &Vec<Vec<f32>> = structure_map.entry(type_distribution).or_default();
+
+        let mut new_structure = vec![];
+        for (one, two) in new_candidate.ones().combinations(2).map(|v| (v[0], v[1])) {
+            new_structure.push(self.distances_matrix[one][two]);
+        }
+        new_structure.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap().reverse());
+
+        let unique = structure_vec.iter().all(|structure| {
+            new_structure
+                .iter()
+                .zip(structure.iter())
+                .any(|(one, two)| (one - two).abs() > self.options.difference_distance)
+        });
+        if unique {
+            let structure_vec = structure_map.get_mut(&type_distribution).unwrap();
+            structure_vec.push(new_structure);
+        }
+        unique
+    }
+
+    pub(crate) fn insideout_filter(
+        &self,
+        new_candidate: &FixedBitSet,
+        structure_map: &mut HashMap<(usize, usize, usize), Vec<Vec<f32>>>,
+    ) -> bool {
+        let type_distribution = (
+            new_candidate.union_count(&self.tripoint_mask),
+            new_candidate.union_count(&self.midpoint_mask),
+            new_candidate.union_count(&self.singlet_mask),
+        );
+
+        let structure_vec: &Vec<Vec<f32>> = structure_map.entry(type_distribution).or_default();
+
+        let mut new_structure = vec![];
+        for (one, two) in new_candidate.ones().combinations(2).map(|v| (v[0], v[1])) {
+            new_structure.push(self.distances_matrix[one][two]);
+        }
+        new_structure.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+        new_structure = {
+            let start = &new_structure[0..new_structure.len() / 2];
+            let end = &new_structure[new_structure.len() / 2..new_structure.len()];
+            end.iter()
+                .copied()
+                .interleave(start.iter().copied().rev())
+                .collect_vec()
+        };
+
+        let unique = structure_vec.iter().all(|structure| {
+            new_structure
+                .iter()
+                .zip(structure.iter())
+                .any(|(one, two)| (one - two).abs() > self.options.difference_distance)
+        });
+        if unique {
+            let structure_vec = structure_map.get_mut(&type_distribution).unwrap();
+            structure_vec.push(new_structure);
+        }
+        unique
+    }
+
     pub(crate) fn simtree_filter(
         &self,
         new_candidate: &FixedBitSet,
@@ -457,7 +530,7 @@ impl BitArrayRepresentation {
     }
 
     /// Create a sorted array of distances between the combinations of all points.
-    /// 
+    ///
     /// # Panics
     /// Could technically panic but I don't see that happening.
     pub fn create_diff_vector(&self, new_candidate: &FixedBitSet) -> Vec<NotNan<f32>> {
@@ -510,8 +583,7 @@ impl BitArrayRepresentation {
                         60.0,
                         1.0,
                     ),
-                    leave = true,
-                    position = 1
+                    leave = true
                 )
             };
 

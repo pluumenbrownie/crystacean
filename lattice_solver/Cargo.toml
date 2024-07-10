@@ -48,6 +48,9 @@ name = "from_json"
 [[example]]
 name = "close_tree"
 
+[[example]]
+name = "dd_variance"
+
 [profile.bench]
 debug = true 
 

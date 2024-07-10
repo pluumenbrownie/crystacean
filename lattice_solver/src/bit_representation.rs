@@ -103,6 +103,11 @@ impl SettingsBuilder {
 }
 
 #[macro_export]
+/// Available settings:
+///  - `max_singlets`
+///  - `difference_distance`
+///  - `max`
+///  - `solve_filter`
 macro_rules! bit_array_settings {
     ( $latt:expr, $($setter_method: ident = $value: expr),*) => {
         // use lattice_solver::SettingsBuilder;
@@ -118,6 +123,8 @@ pub enum BitArrayFilter {
     None,
     Similarity,
     SimTrees,
+    Flipped,
+    InsideOut,
 }
 
 #[derive(Debug, PartialEq, Eq, Default)]
