@@ -24,7 +24,7 @@ use termion::{clear, cursor};
 fn huge_run(filter: BitArrayFilter) -> Vec<BitArraySolution> {
     println!();
     let lattice = Lattice::from_dft_json(
-        "../exports/scaling_lattices/T16.json".into(),
+        "../test_lattices/T16.json".into(),
         1.1,
         true,
     );
@@ -52,7 +52,7 @@ fn huge_run(filter: BitArrayFilter) -> Vec<BitArraySolution> {
 // #[ignore]
 fn scaling(structure: &str) -> Vec<BitArraySolution> {
     let lattice = Lattice::from_dft_json(
-        format!("../exports/scaling_lattices/{}", structure),
+        format!("../test_lattices/{}", structure),
         1.1,
         true,
     );
@@ -79,7 +79,7 @@ fn scaling(structure: &str) -> Vec<BitArraySolution> {
 // #[ignore]
 fn simil_0_1(structure: &str) -> Vec<BitArraySolution> {
     let lattice = Lattice::from_dft_json(
-        format!("../exports/scaling_lattices/{}", structure),
+        format!("../test_lattices/{}", structure),
         1.1,
         true,
     );
@@ -106,7 +106,7 @@ fn simil_0_1(structure: &str) -> Vec<BitArraySolution> {
 // #[ignore]
 fn simil_0_5(structure: &str) -> Vec<BitArraySolution> {
     let lattice = Lattice::from_dft_json(
-        format!("../exports/scaling_lattices/{}", structure),
+        format!("../test_lattices/{}", structure),
         1.1,
         true,
     );
