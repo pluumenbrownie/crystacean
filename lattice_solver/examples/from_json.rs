@@ -1,7 +1,9 @@
+use std::process::exit;
+
 use lattice_solver::{bit_array_settings, BitArrayFilter, BitArraySettings, Lattice};
 
 fn main() {
-    let lattice = Lattice::from_dft_json("../exports/scaling_lattices/T20.json".into(), 3.5, false);
+    let lattice = Lattice::from_dft_json("../test_lattices/T20.json".into(), 3.5, false);
 
     let options = bit_array_settings!(
         lattice,
@@ -12,8 +14,9 @@ fn main() {
     let bit_lattice = lattice.get_intermediary(options);
     // let filtered = bit_lattice.filtered(filter);
 
-    // bit_lattice.print_distances();
     println!("{}", bit_lattice.__str__());
+    bit_lattice.print_distances();
+    exit(0);
 
     let solutions = bit_lattice.solve(true, false);
     println!(" Solutions found: {}", solutions.len());

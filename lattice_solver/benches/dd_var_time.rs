@@ -1,21 +1,9 @@
-use lattice_solver::{
-    bit_array_settings,
-    test_points::{huge_points, lattice_points},
-    BitArrayFilter, BitArraySettings, BitArraySolution, Lattice,
-};
-use termion::{cursor, clear};
+use lattice_solver::{bit_array_settings, BitArrayFilter, BitArraySolution, Lattice};
+use termion::{clear, cursor};
 
-fn main() {
-    for margin in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0].into_iter().rev() {
-        let results = similarity(margin);
-        println!("\rMargin: {:<4} --- Structures: {}{}", margin, results.len(), clear::AfterCursor);
-    }
-    {
-        let results = none();
-        println!("\rMargin: {:<4} --- Structures: {}{}", "None", results.len(), clear::AfterCursor);
-    }
-}
 
+
+#[divan::bench(max_time = 120, args = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])]
 fn similarity(margin: f32) -> Vec<BitArraySolution> {
     let lattice = Lattice::from_dft_json(
         "../test_lattices/T20.json".into(),
@@ -32,9 +20,17 @@ fn similarity(margin: f32) -> Vec<BitArraySolution> {
 
     let bit_lattice = lattice.get_intermediary(options);
 
-    bit_lattice.solve(true, false)
+    let result = bit_lattice.solve(true, true);
+    print!(
+        "\r{}{}",
+        cursor::Right(15),
+        clear::AfterCursor
+    );
+    result
 }
 
+
+#[divan::bench(max_time = 120)]
 fn none() -> Vec<BitArraySolution> {
     let lattice = Lattice::from_dft_json(
         "../test_lattices/T20.json".into(),
@@ -50,5 +46,15 @@ fn none() -> Vec<BitArraySolution> {
 
     let bit_lattice = lattice.get_intermediary(options);
 
-    bit_lattice.solve(true, false)
+    let result = bit_lattice.solve(true, true);
+    print!(
+        "\r{}{}",
+        cursor::Right(15),
+        clear::AfterCursor
+    );
+    result
+}
+
+fn main() {
+    divan::main();
 }

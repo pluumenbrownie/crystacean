@@ -33,6 +33,10 @@ harness = false
 name = "divan_bench"
 harness = false
 
+[[bench]]
+name = "dd_var_time"
+harness = false
+
 [[example]]
 name = "solve"
 
