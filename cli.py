@@ -107,7 +107,10 @@ ASE_BOOL = Annotated[
 
 
 @app.command()
-def plot(path_to_json: str):
+def plot(path_to_json: Annotated[
+    str,
+    typer.Argument(help="Path to either a single json file, or a directory filled with json files.")
+]):
     """
     Plot either a single or a directory of interface json files.
     """
@@ -161,7 +164,7 @@ def from_size(
     if save_to:
         os.mkdir(save_to)
     custom_boundary_points = full_lattice_from_basis_vectors(size)
-    lattice = Lattice(custom_boundary_points, 1.1)
+    lattice = Lattice(custom_boundary_points)
 
     if plot:
         plt.plot(
