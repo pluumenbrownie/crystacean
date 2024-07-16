@@ -4,6 +4,7 @@ from tqdm import tqdm
 from typing_extensions import Annotated
 import os
 from shutil import copy2
+from collections import Counter
 
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
@@ -103,6 +104,14 @@ ASE_BOOL = Annotated[
         "-j",
         help="If true, the found structures get exported as an ASE parsable structure in json format.",
     ),
+]
+STATISTICS = Annotated[
+    bool,
+    typer.Option(
+        "--statistics",
+        "-t",
+        help="Prints how many found structures have the same amount of connections."
+    )
 ]
 
 
@@ -274,6 +283,7 @@ def from_file(
     plot: PLOT_BOOL = False,
     save_to: SAVETO_STR = "",
     save_ase_json: ASE_BOOL = False,
+    statistics: STATISTICS = False,
     rings_filter: RINGS_BOOL = False,
     max_singlets: SINGLET_INT = 2,
     use_parallel: PARALLEL_BOOL = False,
@@ -292,6 +302,7 @@ def from_file(
         plot,
         save_to,
         save_ase_json,
+        statistics,
         rings_filter,
         max_singlets,
         use_parallel,
@@ -312,6 +323,7 @@ def from_dft_folder(
     ] = None,
     creation_distance_margin: CDM_FLOAT = 3.5,
     plot: PLOT_BOOL = False,
+    statistics: STATISTICS = False,
     rings_filter: RINGS_BOOL = True,
     output_file_name: Annotated[
         str,
@@ -362,6 +374,7 @@ def from_dft_folder(
         plot,
         save_to,
         True,
+        statistics,
         rings_filter,
         max_singlets,
         use_parallel,
@@ -471,6 +484,7 @@ def ase_json_handler(
     plot: bool,
     save_to: str,
     save_ase_json: bool,
+    statistics: bool,
     rings_filter: bool,
     max_singlets: int,
     use_parallel: bool,
@@ -538,6 +552,19 @@ def ase_json_handler(
                 )
             else:
                 solved_lattice.export(save_to, f"{prefix}_{number:>04}.json")
+    
+    if statistics:
+        solutions_dict = Counter()
+        for solution in solutions:
+            solved_lattice = lattice.to_solved_lattice(solution)
+            type_amount = (
+                len(solved_lattice.tripoints_to_plot()[0]),
+                len(solved_lattice.midpoints_to_plot()[0]),
+                len(solved_lattice.singlets_to_plot()[0]),
+            )
+            solutions_dict[type_amount] += 1
+        for item in solutions_dict.items():
+            print(item)
 
     if plot:
         for number, solution in progress:
