@@ -269,7 +269,7 @@ def from_file(
     filepath: Annotated[
         str,
         typer.Argument(
-            help="The input file to find interface configurations for.",
+            help="The input file to find interface configurations for. File must be in a ASE readable json format.",
             show_default=False,
         ),
     ],
