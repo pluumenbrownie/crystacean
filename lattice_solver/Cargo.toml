@@ -55,6 +55,9 @@ name = "close_tree"
 [[example]]
 name = "dd_variance"
 
+[[example]]
+name = "readme_example"
+
 [profile.bench]
 debug = true 
 
