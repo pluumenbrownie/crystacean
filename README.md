@@ -152,6 +152,6 @@ fn main() {
 ```
 Try this example by running
 ```bash
-cargo run --example readme_example -release
+cargo run --example readme_example --release
 ```
 in the `lattice_solver` folder.
