@@ -1,5 +1,5 @@
 [package]
-name = "lattice_solver"
+name = "crystacean_rs"
 version = "1.0.0"
 edition = "2021"
 

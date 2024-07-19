@@ -1,4 +1,4 @@
-use lattice_solver::{
+use crystacean_rs::{
     bit_array_settings,
     test_points::{huge_points, lattice_points},
     BitArrayFilter, BitArraySettings, BitArraySolution, Lattice,
@@ -6,7 +6,7 @@ use lattice_solver::{
 use termion::{clear, cursor};
 
 // #[divan::bench(max_time = 120, args = [true, false])]
-// fn full_run_parallel(silent: bool) -> Vec<lattice_solver::BitArraySolution> {
+// fn full_run_parallel(silent: bool) -> Vec<crystacean_rs::BitArraySolution> {
 //     let lattice_points = lattice_points();
 
 //     let lattice = Lattice::python_new(lattice_points, 1.1, true);

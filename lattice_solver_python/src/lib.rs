@@ -1,12 +1,22 @@
-use ::lattice_solver::BitArrayFilter;
-use ::lattice_solver::BitArraySettings;
+//! "[\s\S]*?(?P<docstring>(?:(?P<indent> *)/// .*\n?)+)\s*(?:pub )?fn (?P<funcname>[a-zA-Z_]+)\(
+//! ?\s*(?:&(self(?:,\s*)?))?
+//! ?(?:([a-zA-Z_]*): [&a-zA-Z0-9]*(?:<[&a-zA-Z_<>(), 0-9]*>|\([&a-zA-Z_<>(), 0-9]*\))?)?
+//! ?(?:(,\s*[a-zA-Z_]*): [&a-zA-Z0-9]*(?:<[&a-zA-Z_<>(), 0-9]*>|\([&a-zA-Z_<>(), 0-9]*\))?)?
+//! ?(?:(,\s*[a-zA-Z_]*): [&a-zA-Z0-9]*(?:<[&a-zA-Z_<>(), 0-9]*>|\([&a-zA-Z_<>(), 0-9]*\))?)?
+//! ?(?:(,\s*[a-zA-Z_]*): [&a-zA-Z0-9]*(?:<[&a-zA-Z_<>(), 0-9]*>|\([&a-zA-Z_<>(), 0-9]*\))?)?
+//! ?(?:(,\s*[a-zA-Z_]*): [&a-zA-Z0-9]*(?:<[&a-zA-Z_<>(), 0-9]*>|\([&a-zA-Z_<>(), 0-9]*\))?)?
+//! ?(?:(,\s*[a-zA-Z_]*): [&a-zA-Z0-9]*(?:<[&a-zA-Z_<>(), 0-9]*>|\([&a-zA-Z_<>(), 0-9]*\))?)?
+//! ?(?:(,\s*[a-zA-Z_]*): [&a-zA-Z0-9]*(?:<[&a-zA-Z_<>(), 0-9]*>|\([&a-zA-Z_<>(), 0-9]*\))?)?
+//! ?[\s,]*\)"g
+use ::crystacean_rs::BitArrayFilter;
+use ::crystacean_rs::BitArraySettings;
 use pyo3::prelude::*;
 use std::ffi::OsString;
 
-use ::lattice_solver::site_filter::SiteFilter as WrappedFilter;
-use ::lattice_solver::BitArrayRepresentation as WrappedRepresentation;
-use ::lattice_solver::BitArraySolution as WrappedSolution;
-use ::lattice_solver::Lattice as WrappedLattice;
+use ::crystacean_rs::site_filter::SiteFilter as WrappedFilter;
+use ::crystacean_rs::BitArrayRepresentation as WrappedRepresentation;
+use ::crystacean_rs::BitArraySolution as WrappedSolution;
+use ::crystacean_rs::Lattice as WrappedLattice;
 
 #[pyclass]
 struct BitArraySolution {

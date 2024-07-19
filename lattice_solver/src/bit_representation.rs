@@ -103,15 +103,16 @@ impl SettingsBuilder {
 }
 
 #[macro_export]
+/// First argument must be a `Lattice`.
 /// Available settings:
-///  - `max_singlets`
-///  - `difference_distance`
-///  - `max`
-///  - `solve_filter`
+///  - `max_singlets`: `usize`
+///  - `difference_distance`: `f32`
+///  - `max`: `(f32, f32)`
+///  - `solve_filter`: `BitArrayFilter`
 macro_rules! bit_array_settings {
     ( $latt:expr, $($setter_method: ident = $value: expr),*) => {
-        // use lattice_solver::SettingsBuilder;
-        lattice_solver::SettingsBuilder::default()$(.$setter_method($value))*.build(&$latt);
+        // use crystacean_rs::SettingsBuilder;
+        crystacean_rs::SettingsBuilder::default()$(.$setter_method($value))*.build(&$latt);
     };
 
     ( $latt:expr ) => {BitArraySettings::default(&$latt);};
@@ -135,7 +136,7 @@ impl BitArraySolution {
     /// it's full form.
     ///
     /// ```
-    /// use lattice_solver::BitArraySolution;
+    /// use crystacean_rs::BitArraySolution;
     /// use fixedbitset::FixedBitSet;
     ///
     /// let mut compressed = BitArraySolution(

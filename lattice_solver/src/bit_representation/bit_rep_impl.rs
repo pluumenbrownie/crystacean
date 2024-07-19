@@ -53,7 +53,7 @@ impl BitArrayRepresentation {
     ///
     /// ## Example:
     /// ```
-    /// # use lattice_solver::{BitArraySolution, BitArrayRepresentation};
+    /// # use crystacean_rs::{BitArraySolution, BitArrayRepresentation};
     /// # use fixedbitset::FixedBitSet;
     /// #
     /// let bit_array_repr = BitArrayRepresentation::create_debug(
@@ -122,7 +122,7 @@ impl BitArrayRepresentation {
     ///
     /// ## Example:
     /// ```
-    /// # use lattice_solver::{BitArraySolution, BitArrayRepresentation};
+    /// # use crystacean_rs::{BitArraySolution, BitArrayRepresentation};
     /// # use fixedbitset::FixedBitSet;
     /// #
     /// let bit_array_repr = BitArrayRepresentation::create_debug(

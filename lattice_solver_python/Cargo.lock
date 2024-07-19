@@ -91,8 +91,24 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 name = "crystacean"
 version = "1.1.0"
 dependencies = [
- "lattice_solver",
+ "crystacean_rs",
  "pyo3",
+]
+
+[[package]]
+name = "crystacean_rs"
+version = "1.0.0"
+dependencies = [
+ "fixedbitset",
+ "fmt-derive",
+ "itertools 0.13.0",
+ "json",
+ "kdam",
+ "kiddo",
+ "ordered-float",
+ "rayon",
+ "scc",
+ "termion",
 ]
 
 [[package]]
@@ -320,22 +336,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "ubyte",
-]
-
-[[package]]
-name = "lattice_solver"
-version = "1.0.0"
-dependencies = [
- "fixedbitset",
- "fmt-derive",
- "itertools 0.13.0",
- "json",
- "kdam",
- "kiddo",
- "ordered-float",
- "rayon",
- "scc",
- "termion",
 ]
 
 [[package]]

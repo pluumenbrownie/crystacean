@@ -1,4 +1,4 @@
-use lattice_solver::{
+use crystacean_rs::{
     bit_array_settings, test_points::{huge_points, lattice_points}, BitArrayFilter, BitArraySettings, Lattice,
 };
 

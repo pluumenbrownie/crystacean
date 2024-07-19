@@ -1,6 +1,6 @@
 use std::process::exit;
 
-use lattice_solver::{bit_array_settings, BitArrayFilter, BitArraySettings, Lattice};
+use crystacean_rs::{bit_array_settings, BitArrayFilter, BitArraySettings, Lattice};
 
 fn main() {
     let lattice = Lattice::from_dft_json("../test_lattices/T20.json".into(), 3.5, false);

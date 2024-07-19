@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use lattice_solver::{bit_array_settings, test_points::lattice_points, BitArraySettings, Lattice};
+use crystacean_rs::{bit_array_settings, test_points::lattice_points, BitArraySettings, Lattice};
 use std::time::Duration;
 
 fn criterion_long(c: &mut Criterion) {

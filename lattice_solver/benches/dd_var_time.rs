@@ -1,4 +1,4 @@
-use lattice_solver::{bit_array_settings, BitArrayFilter, BitArraySolution, Lattice};
+use crystacean_rs::{bit_array_settings, BitArrayFilter, BitArraySolution, Lattice};
 use termion::{clear, cursor};
 
 

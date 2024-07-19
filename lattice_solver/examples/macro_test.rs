@@ -1,4 +1,4 @@
-use lattice_solver::{BitArraySettings, Lattice, test_points::lattice_points, bit_array_settings, BitArrayFilter};
+use crystacean_rs::{BitArraySettings, Lattice, test_points::lattice_points, bit_array_settings, BitArrayFilter};
 
 fn main() {
     let lattice = Lattice::python_new(lattice_points(), 1.1, true);

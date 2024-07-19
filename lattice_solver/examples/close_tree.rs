@@ -1,4 +1,4 @@
-use lattice_solver::close_vector_tree::CloseVectorTree;
+use crystacean_rs::close_vector_tree::CloseVectorTree;
 use ordered_float::NotNan;
 
 fn main() {

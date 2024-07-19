@@ -216,6 +216,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
+name = "crystacean_rs"
+version = "1.0.0"
+dependencies = [
+ "criterion",
+ "divan",
+ "fixedbitset",
+ "fmt-derive",
+ "itertools 0.13.0",
+ "json",
+ "kdam",
+ "kiddo",
+ "ordered-float",
+ "rayon",
+ "scc",
+ "termion",
+]
+
+[[package]]
 name = "csscolorparser"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -494,24 +512,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "ubyte",
-]
-
-[[package]]
-name = "lattice_solver"
-version = "1.0.0"
-dependencies = [
- "criterion",
- "divan",
- "fixedbitset",
- "fmt-derive",
- "itertools 0.13.0",
- "json",
- "kdam",
- "kiddo",
- "ordered-float",
- "rayon",
- "scc",
- "termion",
 ]
 
 [[package]]
