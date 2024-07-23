@@ -289,6 +289,10 @@ def from_file(
     use_parallel: PARALLEL_BOOL = False,
     similarity_filter: SIMILARIRY_BOOL = False,
     difference_distance: DD_FLOAT = 0.05,
+    debug: Annotated[
+        bool,
+        typer.Option("--debug", help="Plot debug information.")
+    ] = False,
 ):
     """
     Create interface configurations from ASE json file. File must contain cell data.
@@ -308,6 +312,7 @@ def from_file(
         use_parallel,
         similarity_filter,
         difference_distance,
+        debug,
     )
 
 
@@ -380,6 +385,7 @@ def from_dft_folder(
         use_parallel,
         similarity_filter,
         difference_distance,
+        False,
     )
 
     os.remove(f"{save_to}/temp/{prefix}.json")
@@ -490,12 +496,40 @@ def ase_json_handler(
     use_parallel: bool,
     similarity_filter: bool,
     difference_distance: float,
+    debug: bool,
 ):
     if not (plot or save_to):
         print("NOTE: both plot and save_to are false!")
     lattice = from_dft_json(filepath, creation_distance_margin, False)
 
-    if plot:
+    if debug:
+        plt.plot(*lattice.points_to_plot(), "o", markersize=lattice_size)
+        plt.plot(
+            *lattice.midpoints_to_plot(),
+            "x",
+            markersize=site_size,
+            markeredgewidth=cross_thickness,
+        )
+        plt.plot(*lattice.tripoints_to_plot(), "s", markersize=site_size)
+        plt.plot(*lattice.singlets_to_plot(), "^", markersize=site_size)
+        for num, coord in enumerate( zip( *lattice.oxygens_to_plot())):
+            plt.annotate(str(num), coord)
+        plt.axis("equal")
+        plt.show()
+        plt.plot(*lattice.points_to_plot(), "o", markersize=lattice_size)
+        plt.plot(
+            *lattice.midpoints_to_plot(),
+            "x",
+            markersize=site_size,
+            markeredgewidth=cross_thickness,
+        )
+        plt.plot(*lattice.tripoints_to_plot(), "s", markersize=site_size)
+        plt.plot(*lattice.singlets_to_plot(), "^", markersize=site_size)
+        for num, coord in enumerate( zip( *lattice.points_to_plot())):
+            plt.annotate(str(num), coord)
+        plt.axis("equal")
+        plt.show()
+    elif plot:
         plt.plot(*lattice.points_to_plot(), "o", markersize=lattice_size)
         plt.plot(
             *lattice.midpoints_to_plot(),

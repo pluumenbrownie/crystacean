@@ -23,7 +23,7 @@ fn main() {
     for (number, solution) in solutions.iter().enumerate() {
         let solved_lattice = lattice.to_solved_lattice(solution);
         solved_lattice.export_as_ase_json(
-            (&format!("../exports/T16_example/example_{number:>4}.json"))
+            &format!("../exports/T16_example/example_{number:>4}.json")
         );
     }
 }

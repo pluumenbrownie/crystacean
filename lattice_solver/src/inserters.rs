@@ -74,18 +74,18 @@ pub fn insert_tripoints(
                 covered_sites.insert(identifier)
             })
             .filter(|a| {
-                out_lattice.points[a[0].item as usize].x != out_lattice.points[a[1].item as usize].x
-            })
-            .filter(|a| {
                 out_lattice.points[number].ghost_to.is_none()
-                    || out_lattice.points[a[0].item as usize].ghost_to.is_none()
-                    || out_lattice.points[a[1].item as usize].ghost_to.is_none()
+                || out_lattice.points[a[0].item as usize].ghost_to.is_none()
+                || out_lattice.points[a[1].item as usize].ghost_to.is_none()
             })
             .filter(|a| {
                 out_lattice.points[a[0].item as usize]
-                    .distance_squared_to(&out_lattice.points[a[1].item as usize])
-                    <= node_search_distance
-            });
+                .distance_squared_to(&out_lattice.points[a[1].item as usize])
+                <= node_search_distance
+            })
+            // .inspect(|a| if number == 25 {println!("({number}, {}, {})", a[0].item, a[1].item)})
+            // .collect_vec()
+            ;
 
         for site in sites {
             let x = (out_lattice.points[number].x
