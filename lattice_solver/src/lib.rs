@@ -65,13 +65,24 @@ impl Lattice {
     }
 
     fn generate_exclusions(&mut self) {
+        let oxygen_amount = self.oxygens.len();
+        let mut distances_matrix = vec![];
+
+        for number in 0..oxygen_amount {
+            let mut distances_row = vec![];
+            for other in 0..oxygen_amount {
+                distances_row.push(self.distance_between(OxygenIndex(number), OxygenIndex(other)));
+            }
+            distances_matrix.push(distances_row);
+        }
+
         for (number, oxygen) in self.oxygens.iter().enumerate() {
             for index in oxygen.sitetype.iter() {
                 let mut connections = self.points[index.0].get_connections().write().unwrap();
                 connections.push(OxygenIndex(number));
             }
         }
-        for oxygen in &mut self.oxygens {
+        for (number, oxygen) in self.oxygens.iter_mut().enumerate() {
             for connection in oxygen.sitetype.iter() {
                 let point = &self.points[connection.0];
 
@@ -79,6 +90,12 @@ impl Lattice {
                 for ox_con in point.get_connections().read().unwrap().iter() {
                     oxygen.exclusions.push(*ox_con);
                 }
+            }
+            // points which are to close to one another should exclude eachother
+            for other in 0..oxygen_amount {
+                if distances_matrix[number][other] < 0.02 && number != other {
+                    oxygen.exclusions.push(OxygenIndex(other));
+                };
             }
             oxygen.exclusions.dedup();
         }
@@ -651,6 +668,7 @@ impl Lattice {
             }
         }
 
+        let mut c = (0usize, 0usize, 0usize);
         for oxygen in oxygens {
             new_numbers["__ndarray__"][2]
                 .push(14)
@@ -664,6 +682,11 @@ impl Lattice {
             new_positions["__ndarray__"][2]
                 .push(oxygen.z)
                 .expect("new_positions[\"__ndarray__\"][2].push(oxygen.z)");
+            match oxygen.sitetype {
+                SiteType::Tripoint(_) => c = (c.0 + 1, c.1, c.2),
+                SiteType::Midpoint(_) => c = (c.0, c.1 + 1, c.2),
+                SiteType::Singlet(_)  => c = (c.0, c.1, c.2 + 1),
+            };
             self.add_crown(oxygen, &mut new_numbers, &mut new_positions);
         }
         new_numbers["__ndarray__"][0][0] = new_numbers["__ndarray__"][2].len().into();
@@ -679,6 +702,9 @@ impl Lattice {
             positions: new_positions,
             unique_id: "Not unique",
             user: parsed[last_id]["user"].clone(),
+            tripoints: c.0,
+            midpoints: c.1,
+            singlets: c.2,
         };
 
         let mut file = File::create(filename).expect("Folder does not exist!");
