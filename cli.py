@@ -5,6 +5,8 @@ from typing_extensions import Annotated
 import os
 from shutil import copy2
 from collections import Counter
+import json
+import re
 
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
@@ -317,7 +319,7 @@ def from_file(
 
 
 @app.command()
-def from_dft_folder(
+def from_dft_folders(
     dirpath: DIRPATH_STR,
     save_to: Annotated[
         str,
@@ -483,6 +485,55 @@ def cull_results(
     cull(dirpath, margin, postfix)
 
 
+@app.command()
+def process_results(
+    dirpath: DIRPATH_STR,
+    type_info_path: Annotated[
+        str,
+        typer.Argument(
+            help="The directory with the original ASE json files, which contain the amount \
+                of tripoints, midpoints and singlets for a given structure."
+        )
+    ],
+    output_file_path: Annotated[
+        str,
+        typer.Argument(help="File to store the found results in.")
+    ],
+):
+    """
+    Extract energies from DFT results and write them to a file.
+    """
+    assert os.path.isdir(dirpath), "dirpath should be a directory."
+    dirpath = dirpath.removesuffix("/")
+    assert os.path.isdir(type_info_path), f"folder {type_info_path} not found."
+
+    folder_list = tqdm(
+        os.listdir(dirpath),
+        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}  ",
+    )
+
+    if not output_file_path[-4:] == ".csv":
+        output_file_path += ".csv"
+    with open(output_file_path, "x") as output_file:
+        output_file.write("structure,energy,tripoints,midpoints,singlets\n")
+        for folder in folder_list:
+            if os.path.isfile(folder):
+                continue
+            structure_id = "-".join(re.findall(r"((?:\d{4,})+)(?!.out)", folder))
+            if structure_id is None:
+                continue
+            structure_file = aseread(f"{dirpath}/{folder}/SiC-pos-1.xyz")
+            energy = structure_file.info["E"]  # type: ignore
+
+            with open(f"{type_info_path}/{folder}.json") as file:
+                type_info = json.load(file)
+            tripoints = type_info["1"]["tripoints"]
+            midpoints = type_info["1"]["midpoints"]
+            singlets = type_info["1"]["singlets"]
+
+            output_file.write(f"{structure_id},{energy},{tripoints},{midpoints},{singlets}\n")
+
+
 def ase_json_handler(
     filepath: str,
     prefix: str,
@@ -543,18 +594,6 @@ def ase_json_handler(
         plt.xlabel("x (Å)")
         plt.ylabel("y (Å)")
         plt.show()
-        # plt.plot(*lattice.points_to_plot(), "o", markersize=lattice_size)
-        # plt.plot(
-        #     *lattice.midpoints_to_plot(),
-        #     "x",
-        #     markersize=site_size,
-        #     markeredgewidth=cross_thickness,
-        # )
-        # plt.plot(*lattice.tripoints_to_plot(), "s", markersize=site_size)
-        # plt.axis("equal")
-        # for num, x, y in lattice.no_rings_plot():
-        #     plt.annotate(str(num), (x, y))
-        # plt.show()
 
     bit_lattice = lattice.get_intermediary(
         max_singlets=max_singlets,
