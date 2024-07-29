@@ -282,7 +282,7 @@ impl Lattice {
             .map(|v| v.as_f32().unwrap())
             .tuples::<(_, _, _)>()
             .collect_tuple()
-            .expect("Json 'cell' property format is incorrect.");
+            .unwrap_or_else(|| panic!("Json 'cell' property format is incorrect: {cell:?}"));
 
         let input_lattice = {
             let mut input_lattice = vec![];
