@@ -295,6 +295,10 @@ def from_file(
         bool,
         typer.Option("--debug", help="Plot debug information.")
     ] = False,
+    silent: Annotated[
+        bool,
+        typer.Option("--silent", help="Don't show the progress bar.")
+    ] = False,
 ):
     """
     Create interface configurations from ASE json file. File must contain cell data.
@@ -315,6 +319,7 @@ def from_file(
         similarity_filter,
         difference_distance,
         debug,
+        silent,
     )
 
 
@@ -387,6 +392,7 @@ def from_dft_folders(
         use_parallel,
         similarity_filter,
         difference_distance,
+        False,
         False,
     )
 
@@ -548,6 +554,7 @@ def ase_json_handler(
     similarity_filter: bool,
     difference_distance: float,
     debug: bool,
+    silent: bool,
 ):
     if not (plot or save_to):
         print("NOTE: both plot and save_to are false!")
@@ -606,9 +613,9 @@ def ase_json_handler(
     # print(bit_lattice)
 
     if use_parallel:
-        solutions = bit_lattice.solve_parallel(True)
+        solutions = bit_lattice.solve_parallel(True, silent=silent)
     else:
-        solutions = bit_lattice.solve(True)
+        solutions = bit_lattice.solve(True, silent=silent)
 
     progress = tqdm(
         enumerate(solutions),

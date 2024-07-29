@@ -49,18 +49,20 @@ struct BitArrayRepresentation {
 impl BitArrayRepresentation {
     /// Start finding possible surface structures.
     ///  - find_all: when false, stops after a single solution has been found.
-    fn solve(&self, find_all: bool) -> Vec<BitArraySolution> {
+    #[pyo3(signature = (find_all, silent=false))]
+    fn solve(&self, find_all: bool, silent: bool) -> Vec<BitArraySolution> {
         self.wrapped
-            .solve(find_all, false)
+            .solve(find_all, silent)
             .into_iter()
             .map(|a| BitArraySolution { wrapped: a })
             .collect()
     }
 
     /// Start solving using the multithreaded algorithm.
-    fn solve_parallel(&self, find_all: bool) -> Vec<BitArraySolution> {
+    #[pyo3(signature = (find_all, silent=false))]
+    fn solve_parallel(&self, find_all: bool, silent: bool) -> Vec<BitArraySolution> {
         self.wrapped
-            .solve_parallel(find_all, false)
+            .solve_parallel(find_all, silent)
             .into_iter()
             .map(|a| BitArraySolution { wrapped: a })
             .collect()
