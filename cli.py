@@ -14,7 +14,7 @@ from ase.io import read as aseread
 
 from classes import from_file as from_file_classes
 from basis_vectors import full_lattice_from_basis_vectors
-from crystacean import Lattice, from_dft_json
+from crystacean import Lattice, from_dft_json  # type: ignore
 from cull_results import cull
 
 # Test libraries required for other files.
@@ -31,12 +31,43 @@ cross_thickness = 4
 app = typer.Typer()
 
 
+def is_file_callback(path: str):
+    if not os.path.isfile(path):
+        raise typer.BadParameter(f"{path} is not a file.")
+    return path
+
+
+def is_dir_callback(path: str):
+    if not os.path.isdir(path):
+        raise typer.BadParameter(f"{path} is not a directory.")
+    path.removesuffix("/")
+    return path
+
+
+def path_exists_callback(path: str):
+    if not os.path.exists(path):
+        raise typer.BadParameter(f"{path} does not exist.")
+    return path
+
+
+def path_empty_callback(path: str):
+    if not os.path.exists(path):
+        raise typer.BadParameter(f"{path} already exists.")
+    return path
+
+
+HELP_CREATE = "Creation"
+HELP_INPUT = "Input"
+HELP_OUTPUT = "Output"
+HELP_DEBUG = "Debugging"
+
 PLOT_BOOL = Annotated[
     bool,
     typer.Option(
         "--plot",
         "-p",
         help="Show the created base lattice and found interface configurations.",
+        rich_help_panel=HELP_OUTPUT,
     ),
 ]
 DIRPATH_STR = Annotated[
@@ -44,6 +75,7 @@ DIRPATH_STR = Annotated[
     typer.Argument(
         help="The input directory to find interface configurations for.",
         show_default=False,
+        callback=is_dir_callback,
     ),
 ]
 CDM_FLOAT = Annotated[
@@ -52,6 +84,7 @@ CDM_FLOAT = Annotated[
         "--creation-distance-margin",
         "-c",
         help="Maximum distance allowed between two attachment points when finding mid- and tripoints",
+        rich_help_panel=HELP_CREATE,
     ),
 ]
 SAVE_DESCRIPTION = (
@@ -59,12 +92,22 @@ SAVE_DESCRIPTION = (
 )
 SAVETO_STR = Annotated[
     str,
-    typer.Option("--save-to", "-s", help=SAVE_DESCRIPTION),
+    typer.Option(
+        "--save-to",
+        "-s",
+        help=SAVE_DESCRIPTION,
+        callback=path_empty_callback,
+        rich_help_panel=HELP_OUTPUT,
+    ),
 ]
 PARALLEL_BOOL = Annotated[
     bool,
     typer.Option(
-        "--parallel", "-l", help="Use the parallel version of the solving method."
+        "--parallel",
+        "-l",
+        help="Use the parallel version of the solving method. Disabled due to lack of utility.",
+        hidden=True,
+        rich_help_panel=HELP_CREATE,
     ),
 ]
 SINGLET_INT = Annotated[
@@ -73,22 +116,17 @@ SINGLET_INT = Annotated[
         "--max-singlets",
         "-m",
         help="Maximum amount of singlets allowed for this new layer.",
+        rich_help_panel=HELP_CREATE,
     ),
 ]
-SIMILARIRY_BOOL = Annotated[
-    bool,
+SIMILARIRY_OPT_FLOAT = Annotated[
+    Optional[float],
     typer.Option(
         "--similarity-filter",
         "-f",
-        help="Use the similarity filter. This filter attempts to cull structures which are translations and rotations of existing structures.",
-    ),
-]
-DD_FLOAT = Annotated[
-    float,
-    typer.Option(
-        "--difference-distance",
-        "-d",
-        help="Maximum delta between distances allowed when using similarity filter. Does nothing when this filter is not used.",
+        help="Use the similarity filter with the given margin. This filter attempts to cull structures which are translations and rotations of existing structures.",
+        rich_help_panel=HELP_CREATE,
+        show_default=False,
     ),
 ]
 RINGS_BOOL = Annotated[
@@ -96,7 +134,8 @@ RINGS_BOOL = Annotated[
     typer.Option(
         "--rings-filter",
         "-r",
-        help="Whether to apply the no-rings filter to the given lattice. Disable this when considering the first layer.",
+        help="Apply the no-rings filter to the given lattice. Enable this when considering layers beyond the first.",
+        rich_help_panel=HELP_CREATE,
     ),
 ]
 ASE_BOOL = Annotated[
@@ -104,24 +143,31 @@ ASE_BOOL = Annotated[
     typer.Option(
         "--save-ase-json",
         "-j",
-        help="If true, the found structures get exported as an ASE parsable structure in json format.",
+        help="If true, the found structures get exported as an ASE parsable structure in json format. Only works with save-to (-s) set.",
+        rich_help_panel=HELP_OUTPUT,
     ),
 ]
-STATISTICS = Annotated[
+STATISTICS_BOOL = Annotated[
     bool,
     typer.Option(
         "--statistics",
         "-t",
-        help="Prints how many found structures have the same amount of connections."
-    )
+        help="Prints how many found structures have the same amount of connections.",
+        rich_help_panel=HELP_OUTPUT,
+    ),
 ]
 
 
 @app.command()
-def plot(path_to_json: Annotated[
-    str,
-    typer.Argument(help="Path to either a single json file, or a directory filled with json files.")
-]):
+def plot(
+    path_to_json: Annotated[
+        str,
+        typer.Argument(
+            help="Path to either a single json file, or a directory filled with json files.",
+            callback=path_exists_callback,
+        ),
+    ]
+):
     """
     Plot either a single or a directory of interface json files.
     """
@@ -157,15 +203,15 @@ def from_size(
     size: Annotated[
         int,
         typer.Option(
-            help="Size of base lattice to use. Amount of attachment sites is 4*size."
+            help="Size of base lattice to use. Amount of attachment sites is 4*size.",
+            rich_help_panel=HELP_CREATE,
         ),
     ] = 1,
     plot: PLOT_BOOL = False,
     save_to: SAVETO_STR = "",
     max_singlets: SINGLET_INT = 2,
     use_parallel: PARALLEL_BOOL = False,
-    similarity_filter: SIMILARIRY_BOOL = False,
-    difference_distance: DD_FLOAT = 0.05,
+    similarity_filter: SIMILARIRY_OPT_FLOAT = None,
 ):
     """
     Create SiO2 interface structures for a SiC unit cell with 4*size attachment points.
@@ -203,10 +249,14 @@ def from_size(
         )
         plt.show()
 
+    if similarity_filter:
+        difference_distance = similarity_filter
+    else:
+        difference_distance = 0.0
     bit_lattice = lattice.get_intermediary(
         max_singlets=max_singlets,
         difference_distance=difference_distance,
-        use_filter=similarity_filter,
+        use_filter=similarity_filter is not None,
     )
     print(bit_lattice)
 
@@ -282,22 +332,25 @@ def from_file(
         ),
     ],
     creation_distance_margin: CDM_FLOAT = 3.5,
-    plot: PLOT_BOOL = False,
-    save_to: SAVETO_STR = "",
-    save_ase_json: ASE_BOOL = False,
-    statistics: STATISTICS = False,
     rings_filter: RINGS_BOOL = False,
     max_singlets: SINGLET_INT = 2,
     use_parallel: PARALLEL_BOOL = False,
-    similarity_filter: SIMILARIRY_BOOL = False,
-    difference_distance: DD_FLOAT = 0.05,
+    similarity_filter: SIMILARIRY_OPT_FLOAT = None,
+    plot: PLOT_BOOL = False,
+    statistics: STATISTICS_BOOL = False,
+    save_to: SAVETO_STR = "",
+    save_ase_json: ASE_BOOL = False,
     debug: Annotated[
         bool,
-        typer.Option("--debug", help="Plot debug information.")
+        typer.Option(
+            "--debug", help="Plot debug information.", rich_help_panel=HELP_DEBUG
+        ),
     ] = False,
     silent: Annotated[
         bool,
-        typer.Option("--silent", help="Don't show the progress bar.")
+        typer.Option(
+            "--silent", help="Don't show the progress bar.", rich_help_panel=HELP_OUTPUT
+        ),
     ] = False,
 ):
     """
@@ -317,7 +370,6 @@ def from_file(
         max_singlets,
         use_parallel,
         similarity_filter,
-        difference_distance,
         debug,
         silent,
     )
@@ -331,30 +383,44 @@ def from_dft_folders(
         typer.Argument(help=SAVE_DESCRIPTION, show_default=False),
     ],
     prefix: Annotated[
-        Optional[str], typer.Argument(help="Identifying prefix to use when saving", show_default="$dirpath lowest folder")
+        Optional[str],
+        typer.Argument(
+            help="Identifying prefix to use when saving",
+            show_default="$dirpath lowest folder",
+        ),
     ] = None,
     creation_distance_margin: CDM_FLOAT = 3.5,
+    max_singlets: SINGLET_INT = 2,
+    use_parallel: PARALLEL_BOOL = False,
+    similarity_filter: SIMILARIRY_OPT_FLOAT = None,
+    statistics: STATISTICS_BOOL = False,
     plot: PLOT_BOOL = False,
-    statistics: STATISTICS = False,
-    rings_filter: RINGS_BOOL = True,
     output_file_name: Annotated[
         str,
-        typer.Option(help="Filename of cp2k DFT result file."),
+        typer.Option(
+            help="Filename of cp2k DFT result file.", rich_help_panel=HELP_OUTPUT
+        ),
     ] = "SiC-pos-1.xyz",
     test_mode: Annotated[
         bool,
-        typer.Option("--test-mode", help="Stop after creating tempfile."),
+        typer.Option(
+            "--test-mode",
+            help="Stop after creating tempfile.",
+            rich_help_panel=HELP_DEBUG,
+        ),
     ] = False,
-    max_singlets: SINGLET_INT = 2,
-    use_parallel: PARALLEL_BOOL = False,
-    similarity_filter: SIMILARIRY_BOOL = False,
-    difference_distance: DD_FLOAT = 0.05,
+    disable_rings_filter: Annotated[
+        bool,
+        typer.Option(
+            "--disable-rings-filter",
+            help="Disable the rings filter when generating new structures.",
+            rich_help_panel=HELP_CREATE,
+        ),
+    ] = False,
 ):
     """
     Find next layer configurations directly from CP2K DFT results.
     """
-    assert os.path.isdir(dirpath), "Filepath should be a directory."
-    dirpath = dirpath.removesuffix("/")
     save_to = save_to.removesuffix("/")
     if not prefix:
         prefix = dirpath.rsplit("/")[-1]
@@ -387,11 +453,10 @@ def from_dft_folders(
         save_to,
         True,
         statistics,
-        rings_filter,
+        not disable_rings_filter,
         max_singlets,
         use_parallel,
         similarity_filter,
-        difference_distance,
         False,
         False,
     )
@@ -407,43 +472,48 @@ def cp2kify(
     dirpath: DIRPATH_STR,
     save_to: Annotated[
         str,
-        typer.Argument(help="Save found interface configurations to given directory.", show_default=False),
+        typer.Argument(
+            help="Save found interface configurations to given directory.",
+            show_default=False,
+        ),
     ],
     in_path: Annotated[
         str,
         typer.Argument(
-            help="The path to the `xxx.in` file needed for CP2K.", show_default=False
+            help="The path to the `xxx.in` file needed for CP2K.",
+            show_default=False,
+            callback=is_file_callback,
         ),
     ],
     basis_path: Annotated[
         str,
-        typer.Argument(help="The `BASIS` file needed for CP2K.", show_default=False),
+        typer.Argument(
+            help="The `BASIS` file needed for CP2K.",
+            show_default=False,
+            callback=is_file_callback,
+        ),
     ],
     run_path: Annotated[
         str,
         typer.Argument(
-            help="The bash script to run the job with sbatch.", show_default=False
+            help="The bash script to run the job with sbatch.",
+            show_default=False,
+            callback=is_file_callback,
         ),
     ],
     destructive: Annotated[
         bool,
         typer.Option(
-            "--destructive", help="Remove given json files when folder has been created."
-        )
+            "--destructive",
+            help="Remove given json files when folder has been created.",
+        ),
     ] = False,
 ):
     """
     Prepares a full folder of ASE json structures for batch processing with cp2k.
     """
-    assert os.path.isdir(dirpath), "Filepath should be a directory."
-    dirpath = dirpath.removesuffix("/")
-    assert os.path.isfile(in_path), "xxx.in file not found."
-    in_path = in_path.removesuffix("/")
-    assert os.path.isfile(basis_path), "BASIS file not found."
-    basis_path = basis_path.removesuffix("/")
-    assert os.path.isfile(run_path), "Bash file not found."
     try:
-         os.mkdir(save_to)
+        os.mkdir(save_to)
     except FileExistsError:
         pass
     save_to = save_to.removesuffix("/")
@@ -497,22 +567,20 @@ def process_results(
     type_info_path: Annotated[
         str,
         typer.Argument(
-            help="The directory with the original ASE json files, which contain the amount \
-                of tripoints, midpoints and singlets for a given structure."
-        )
+            help="The directory with the original ASE json files, which contain the amount "
+            + "of tripoints, midpoints and singlets for a given structure.",
+            callback=is_dir_callback,
+            show_default=False,
+        ),
     ],
     output_file_path: Annotated[
         str,
-        typer.Argument(help="File to store the found results in.")
+        typer.Argument(help="File to store the found results in.", show_default=False),
     ],
 ):
     """
     Extract energies from DFT results and write them to a file.
     """
-    assert os.path.isdir(dirpath), "dirpath should be a directory."
-    dirpath = dirpath.removesuffix("/")
-    assert os.path.isdir(type_info_path), f"folder {type_info_path} not found."
-
     folder_list = tqdm(
         os.listdir(dirpath),
         bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}  ",
@@ -537,7 +605,9 @@ def process_results(
             midpoints = type_info["1"]["midpoints"]
             singlets = type_info["1"]["singlets"]
 
-            output_file.write(f"{structure_id},{energy},{tripoints},{midpoints},{singlets}\n")
+            output_file.write(
+                f"{structure_id},{energy},{tripoints},{midpoints},{singlets}\n"
+            )
 
 
 def ase_json_handler(
@@ -551,8 +621,7 @@ def ase_json_handler(
     rings_filter: bool,
     max_singlets: int,
     use_parallel: bool,
-    similarity_filter: bool,
-    difference_distance: float,
+    similarity_filter: Optional[float],
     debug: bool,
     silent: bool,
 ):
@@ -570,7 +639,7 @@ def ase_json_handler(
         )
         plt.plot(*lattice.tripoints_to_plot(), "s", markersize=site_size)
         plt.plot(*lattice.singlets_to_plot(), "^", markersize=site_size)
-        for num, coord in enumerate( zip( *lattice.oxygens_to_plot())):
+        for num, coord in enumerate(zip(*lattice.oxygens_to_plot())):
             plt.annotate(str(num), coord)
         plt.axis("equal")
         plt.show()
@@ -583,7 +652,7 @@ def ase_json_handler(
         )
         plt.plot(*lattice.tripoints_to_plot(), "s", markersize=site_size)
         plt.plot(*lattice.singlets_to_plot(), "^", markersize=site_size)
-        for num, coord in enumerate( zip( *lattice.points_to_plot())):
+        for num, coord in enumerate(zip(*lattice.points_to_plot())):
             plt.annotate(str(num), coord)
         plt.axis("equal")
         plt.show()
@@ -602,10 +671,14 @@ def ase_json_handler(
         plt.ylabel("y (Å)")
         plt.show()
 
+    if similarity_filter:
+        difference_distance = similarity_filter
+    else:
+        difference_distance = 0.0
     bit_lattice = lattice.get_intermediary(
         max_singlets=max_singlets,
         difference_distance=difference_distance,
-        use_filter=similarity_filter,
+        use_filter=similarity_filter is not None,
     )
     if rings_filter:
         noloops = lattice.no_rings()
@@ -632,7 +705,7 @@ def ase_json_handler(
                 )
             else:
                 solved_lattice.export(save_to, f"{prefix}_{number:>04}.json")
-    
+
     if statistics:
         solutions_dict = Counter()
         for solution in solutions:
