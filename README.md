@@ -40,9 +40,25 @@ $ python cli.py --help
 ### Quickstart
 I want to find possible surface structures for the `T16.json` lattice in the `test_lattices` directory:
 ```bash
-$ python cli.py from-file -f -d 0.1 -m 0 -j -s exports/T16_example test_lattices/T16.json example
+$ python cli.py from-file -f 0.1 -m 0 -j -s exports/T16_example test_lattices/T16.json example
 ```
-This command will take the structure from `exports/T16_example` and find structures, which will be filtered by similarity within 0.1 Angstrom, and which contain no singlet points. These structures will be called `example_<number>` and will be saved in an ASE readable json format. For more information on cli arguments and options, run
+This command will take the structure from `exports/T16_example` and find structures, which will be filtered by similarity within 0.1 Angstrom, and which contain no singlet points. These structures will be called `example_<number>` and will be saved in an ASE readable json format. 
+
+If I have now used one of these structures to run a DFT simulation with CP2K, I will get the results back in a folder like this:
+ - example_0000
+    - BASIS
+    - new.xyz
+    - SiC-1.restart
+    - SiC-pos-1.xyz
+    - etc.
+
+If I want to add another layer to the structure found by CP2K, with the same arguments as above, I run the command:
+```bash
+$ python cli.py from-dft-folder -m 0 -f 0.1 exports/example_0000 exports/second_layer_example
+```
+Any found structures will then be named `example_0000_0000.json`, `example_0000_0001.json` etcetera.
+
+For more information on cli arguments and options, run
 ```bash
 $ python cli.py <command> --help
 ```
@@ -163,3 +179,27 @@ Try this example by running
 cargo run --example readme_example --release
 ```
 in the `lattice_solver` folder.
+
+# The repository
+### cp2k_template
+Contains the data I used for any DFT simulations I ran.
+### examples
+Contains the python examples of this readme.
+### exports
+An empty folder to place any results into.
+### lattice_solver
+Contains the Rust code for the Crystacean library. This library can be used by running an example with 
+```
+cargo run --example <name>
+```
+### lattice_solver_python
+Contains the PyO3 wrapping layer for interoperability between Python and Rust. Build this library with
+```
+maturin develop --release
+```
+(see above).
+### test_lattices
+Contains SiC substrate lattices of several sizes.
+
+# As is
+THIS CODE IS PROVIDED "AS IS" WITH NO WARRANTY OF ANY KIND. WE ARE NOT RESPONSIBLE FOR ANY DAMAGES ARISING OUT OF USING THE PROGRAM. THERE IS NO WARRANTY ON ANY RESULTS PROVIDED BY CRYSTACEAN.
