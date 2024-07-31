@@ -69,8 +69,11 @@ impl Lattice {
 
     fn add_basis(&mut self, basis: [[f32; 3]; 3]) -> Result<(), ()> {
         match self.basis {
-            None => {self.basis = Some(basis); Ok(())},
-            Some(_) => Err(())
+            None => {
+                self.basis = Some(basis);
+                Ok(())
+            }
+            Some(_) => Err(()),
         }
     }
 
@@ -203,22 +206,29 @@ impl Lattice {
         let null_vec = [0.0, 0.0, 0.0];
         let x_vec = self.basis.unwrap()[0];
         let y_vec = self.basis.unwrap()[1];
-        let vec_xy = [x_vec[0]+y_vec[0], x_vec[1]+y_vec[1], x_vec[2]+y_vec[2]];
+        let vec_xy = [
+            x_vec[0] + y_vec[0],
+            x_vec[1] + y_vec[1],
+            x_vec[2] + y_vec[2],
+        ];
         let basis = [null_vec, x_vec, y_vec, vec_xy];
 
-        let distance = |(o, t): ([f32; 3], [f32; 3])| (o[0] - t[0]).powi(2) + (o[1] - t[1]).powi(2) + (o[2] - t[2]).powi(2);
-        
-        let one_vecs = [one].into_iter()
-            .cycle()
-            .zip(basis)
-            .map(|(o, v)| [o[0]-v[0], o[1]-v[1], o[2]-v[2]]);
-        
-        let two_vecs = [t].into_iter()
-            .cycle()
-            .zip(basis)
-            .map(|(t, v)| [t[0]-v[0], t[1]-v[1], t[2]-v[2]]);
+        let distance = |(o, t): ([f32; 3], [f32; 3])| {
+            (o[0] - t[0]).powi(2) + (o[1] - t[1]).powi(2) + (o[2] - t[2]).powi(2)
+        };
 
-        one_vecs.cartesian_product(two_vecs)
+        let one_vecs = std::iter::once(one)
+            .cycle()
+            .zip(basis)
+            .map(|(o, v)| [o[0] - v[0], o[1] - v[1], o[2] - v[2]]);
+
+        let two_vecs = std::iter::once(t)
+            .cycle()
+            .zip(basis)
+            .map(|(t, v)| [t[0] - v[0], t[1] - v[1], t[2] - v[2]]);
+
+        one_vecs
+            .cartesian_product(two_vecs)
             .map(distance)
             .min_by(|x, y| x.partial_cmp(y).unwrap())
             .expect("No distances found.")
@@ -351,7 +361,9 @@ impl Lattice {
         };
 
         let mut lattice = Self::python_new(input_lattice, distance_margin, autodetect_margin);
-        lattice.add_basis([x_vec.into(), y_vec.into(), z_vec.into()]).unwrap();
+        lattice
+            .add_basis([x_vec.into(), y_vec.into(), z_vec.into()])
+            .unwrap();
         lattice.add_source_file(parsed.clone());
 
         lattice
@@ -621,7 +633,7 @@ impl Lattice {
         Self {
             points: self.points.clone(),
             oxygens: solved_oxygens,
-            basis: self.basis.clone(),
+            basis: self.basis,
             source_file: self.source_file.clone(),
         }
     }
@@ -723,7 +735,7 @@ impl Lattice {
             match oxygen.sitetype {
                 SiteType::Tripoint(_) => c = (c.0 + 1, c.1, c.2),
                 SiteType::Midpoint(_) => c = (c.0, c.1 + 1, c.2),
-                SiteType::Singlet(_)  => c = (c.0, c.1, c.2 + 1),
+                SiteType::Singlet(_) => c = (c.0, c.1, c.2 + 1),
             };
             self.add_crown(oxygen, &mut new_numbers, &mut new_positions);
         }
@@ -731,7 +743,6 @@ impl Lattice {
         self.merge_conflicting_sites(&mut new_numbers, &mut new_positions);
         new_numbers["__ndarray__"][0][0] = new_numbers["__ndarray__"][2].len().into();
         new_positions["__ndarray__"][0][0] = new_numbers["__ndarray__"][2].len().into();
-
 
         let mut export_data = json::JsonValue::new_object();
         export_data["1"] = object! {
@@ -793,13 +804,20 @@ impl Lattice {
 
     fn merge_conflicting_sites(&self, numbers: &mut JsonValue, positions: &mut JsonValue) {
         let mut hydrogen_positions: Vec<(usize, [f32; 3])> = vec![];
-        
+
         let mut new_numbers = numbers.clone();
         new_numbers["__ndarray__"][2].clear();
         let mut new_positions = positions.clone();
         new_positions["__ndarray__"][2].clear();
-        
-        let zipped = zip(numbers["__ndarray__"][2].members(), positions["__ndarray__"][2].members().tuples::<(&JsonValue, &JsonValue, &JsonValue)>()).collect_vec();
+
+        let zipped = zip(
+            numbers["__ndarray__"][2].members(),
+            positions["__ndarray__"][2]
+                .members()
+                .tuples::<(&JsonValue, &JsonValue, &JsonValue)>(),
+        )
+        .collect_vec();
+
         'outer: for (number, location) in zipped {
             if number.as_i64().unwrap() == 1 && location.2.as_f32().unwrap() < 20.0 {
                 let coords = [
@@ -811,26 +829,29 @@ impl Lattice {
                     if self.distance_sq(&coords, &hydrogen.1) < H_MARGIN {
                         new_numbers["__ndarray__"][2][hydrogen.0] = 8.into();
                         hydrogen_positions.remove(h_num);
-                        continue 'outer; 
+                        continue 'outer;
                     }
                 }
-                hydrogen_positions.push((new_numbers["__ndarray__"][2].len(), [coords[0], coords[1], coords[2]]));
+                hydrogen_positions.push((
+                    new_numbers["__ndarray__"][2].len(),
+                    [coords[0], coords[1], coords[2]],
+                ));
             }
 
             new_numbers["__ndarray__"][2]
                 .push(number.as_i64().unwrap())
                 .expect("Adding to borrowed new_numbers failed");
             new_positions["__ndarray__"][2]
-                .push( location.0.clone())
+                .push(location.0.clone())
                 .expect("Adding to borrowed new_positions failed");
             new_positions["__ndarray__"][2]
-                .push( location.1.clone())
+                .push(location.1.clone())
                 .expect("Adding to borrowed new_positions failed");
             new_positions["__ndarray__"][2]
-                .push( location.2.clone())
+                .push(location.2.clone())
                 .expect("Adding to borrowed new_positions failed");
         }
-        new_numbers["__ndarray__"][0][0]   = new_numbers["__ndarray__"][2].len().into();
+        new_numbers["__ndarray__"][0][0] = new_numbers["__ndarray__"][2].len().into();
         new_positions["__ndarray__"][0][0] = new_numbers["__ndarray__"][2].len().into();
         *numbers = new_numbers;
         *positions = new_positions;

@@ -376,7 +376,7 @@ def from_file(
 
 
 @app.command()
-def from_dft_folders(
+def from_dft_folder(
     dirpath: DIRPATH_STR,
     save_to: Annotated[
         str,
@@ -398,7 +398,7 @@ def from_dft_folders(
     output_file_name: Annotated[
         str,
         typer.Option(
-            help="Filename of cp2k DFT result file.", rich_help_panel=HELP_OUTPUT
+            help="Filename of cp2k DFT result file.", rich_help_panel=HELP_INPUT
         ),
     ] = "SiC-pos-1.xyz",
     test_mode: Annotated[
@@ -423,7 +423,11 @@ def from_dft_folders(
     """
     save_to = save_to.removesuffix("/")
     if not prefix:
-        prefix = dirpath.rsplit("/")[-1]
+        dirpath = dirpath.strip("/")
+        prefix = dirpath.split("/")[-1]
+        
+    print(f"{dirpath = }")
+    print(f"{prefix = }")
 
     try:
         os.mkdir(save_to)
