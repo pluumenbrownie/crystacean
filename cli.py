@@ -51,7 +51,7 @@ def path_exists_callback(path: str):
 
 
 def path_empty_callback(path: str):
-    if not os.path.exists(path):
+    if os.path.exists(path):
         raise typer.BadParameter(f"{path} already exists.")
     return path
 
