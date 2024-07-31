@@ -437,7 +437,7 @@ def from_dft_folder(
 
     filepath = f"{save_to}/temp/{prefix}.json"
 
-    cellfile = aseread(f"{dirpath}/new.xyz")
+    cellfile = aseread(f"{dirpath}/SiC-1.restart")
     cell = cellfile.get_cell()  # type: ignore
     tempfile = aseread(f"{dirpath}/{output_file_name}")
     tempfile.set_cell(cell)  # type: ignore
