@@ -425,9 +425,6 @@ def from_dft_folder(
     if not prefix:
         dirpath = dirpath.strip("/")
         prefix = dirpath.split("/")[-1]
-        
-    print(f"{dirpath = }")
-    print(f"{prefix = }")
 
     try:
         os.mkdir(save_to)
